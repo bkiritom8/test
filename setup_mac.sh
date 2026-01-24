@@ -34,7 +34,7 @@ python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f
 
 echo ""
 echo "=================================================="
-echo "Setup complete! 🎉"
+echo "Setup complete!"
 echo "=================================================="
 echo ""
 echo "To activate the environment in the future, run:"

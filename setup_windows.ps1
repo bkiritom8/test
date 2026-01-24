@@ -50,7 +50,7 @@ python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f
 
 Write-Host ""
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "Setup complete! 🎉" -ForegroundColor Green
+Write-Host "Setup complete!" -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "To activate the environment in the future, run:" -ForegroundColor Yellow
