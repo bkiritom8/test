@@ -43,7 +43,27 @@ This system consists of four main components:
 
 ## Installation
 
-### Apple Silicon (MPS)
+### Quick Setup (Automated)
+
+**macOS:**
+```bash
+git clone <your-repo-url>
+cd test
+./setup_mac.sh
+```
+
+**Windows:**
+```powershell
+git clone <your-repo-url>
+cd test
+.\setup_windows.ps1
+```
+
+The setup scripts will automatically create a virtual environment, install PyTorch with the correct backend, and verify the installation.
+
+### Manual Setup
+
+#### Apple Silicon (MPS)
 
 ```bash
 # Clone the repository
@@ -61,7 +81,7 @@ pip install "torch>=2.0.0"
 pip install -r requirements.txt
 ```
 
-### Windows with NVIDIA GPU (CUDA)
+#### Windows with NVIDIA GPU (CUDA)
 
 ```powershell
 # Clone the repository
@@ -81,7 +101,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 # Alternatively, visit https://pytorch.org to get the appropriate command for your CUDA version
 ```
 
-### CPU-Only (Any Platform)
+#### CPU-Only (Any Platform)
 
 ```bash
 # Create virtual environment
@@ -293,7 +313,9 @@ Expected performance characteristics:
 ├── model.py             # Neural network architectures
 ├── trainer.py           # Training and evaluation logic
 ├── requirements.txt     # Python dependencies
-└── README.md           # This file
+├── setup_mac.sh         # Automated setup for macOS (MPS)
+├── setup_windows.ps1    # Automated setup for Windows (CUDA)
+└── README.md            # This file
 ```
 
 ## Extending the System
