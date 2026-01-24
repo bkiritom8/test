@@ -46,12 +46,16 @@ This system consists of four main components:
 ### Apple Silicon (MPS)
 
 ```bash
+# Clone the repository
+git clone <your-repo-url>
+cd test
+
 # Ensure you have Python 3.8+ installed
 python3 -m venv venv
 source venv/bin/activate
 
-# Install PyTorch with MPS support
-pip install torch>=2.0.0
+# Install PyTorch with MPS support (note the quotes to prevent shell interpretation)
+pip install "torch>=2.0.0"
 
 # Or install from requirements.txt
 pip install -r requirements.txt
@@ -60,6 +64,10 @@ pip install -r requirements.txt
 ### Windows with NVIDIA GPU (CUDA)
 
 ```powershell
+# Clone the repository
+git clone <your-repo-url>
+cd test
+
 # Ensure you have Python 3.8+ installed
 python -m venv venv
 venv\Scripts\activate
@@ -67,7 +75,10 @@ venv\Scripts\activate
 # Install PyTorch with CUDA support (example for CUDA 11.8)
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 
-# Alternatively, visit https://pytorch.org to get the appropriate command
+# For CUDA 12.1:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Alternatively, visit https://pytorch.org to get the appropriate command for your CUDA version
 ```
 
 ### CPU-Only (Any Platform)
@@ -141,6 +152,114 @@ python main.py --checkpoint-dir ./my_checkpoints
 | `--num-train` | int | 1000 | Number of training samples |
 | `--num-val` | int | 200 | Number of validation samples |
 | `--num-test` | int | 200 | Number of test samples |
+
+## Running on Multiple Machines Concurrently
+
+You can run training on both your Mac and PC simultaneously to compare performance across different hardware accelerators (MPS vs CUDA).
+
+### Option 1: Independent Training Runs (Recommended for Testing)
+
+Run completely separate training sessions on each machine:
+
+**On Mac (MPS):**
+```bash
+# Clone and setup
+git clone <your-repo-url>
+cd test
+python3 -m venv venv
+source venv/bin/activate
+pip install "torch>=2.0.0"
+
+# Run with MPS-specific checkpoint directory
+python main.py --checkpoint-dir ./checkpoints_mac --epochs 20
+```
+
+**On Windows PC (CUDA):**
+```powershell
+# Clone and setup
+git clone <your-repo-url>
+cd test
+python -m venv venv
+venv\Scripts\activate
+pip install torch --index-url https://download.pytorch.org/whl/cu118
+
+# Run with CUDA-specific checkpoint directory
+python main.py --checkpoint-dir ./checkpoints_pc --epochs 20
+```
+
+This allows you to:
+- Compare training speeds (epochs/sec) between MPS and CUDA
+- Verify identical behavior across platforms
+- Test different hyperparameters on each machine
+
+### Option 2: Shared Checkpoints via Cloud Storage
+
+To resume training across machines using shared checkpoints:
+
+**Setup:**
+```bash
+# On both machines, use a cloud-synced directory (Dropbox, Google Drive, OneDrive, etc.)
+# macOS example:
+python main.py --checkpoint-dir ~/Dropbox/pytorch_checkpoints
+
+# Windows example:
+python main.py --checkpoint-dir "C:\Users\YourName\Dropbox\pytorch_checkpoints"
+```
+
+**Workflow:**
+1. Start training on Mac, let it run for 10 epochs
+2. Cloud service syncs checkpoints automatically
+3. Stop training on Mac
+4. Continue on PC by loading the checkpoint:
+
+```python
+# Add to main.py to resume from checkpoint
+from pathlib import Path
+
+checkpoint_path = Path("path/to/best_model.pt")
+if checkpoint_path.exists():
+    trainer.load_checkpoint(checkpoint_path)
+```
+
+### Option 3: Git-Based Checkpoint Sharing
+
+Share checkpoints via Git LFS (for smaller models):
+
+```bash
+# Install Git LFS (one-time setup)
+git lfs install
+git lfs track "*.pt"
+
+# On Mac - train and commit checkpoints
+python main.py --epochs 10
+git add checkpoints/
+git commit -m "Training checkpoint after 10 epochs on MPS"
+git push
+
+# On PC - pull and continue
+git pull
+python main.py --epochs 20  # Will continue if you add resume logic
+```
+
+### Performance Comparison Tips
+
+To fairly compare MPS vs CUDA performance:
+
+```bash
+# Run identical configurations
+# Mac:
+python main.py --epochs 10 --batch-size 64 --model resnet --verbose
+
+# PC:
+python main.py --epochs 10 --batch-size 64 --model resnet --verbose
+
+# Compare the "Time: X.XXs" per epoch in the logs
+```
+
+Expected performance characteristics:
+- **CUDA (high-end NVIDIA)**: Fastest training, best for large models
+- **MPS (M-series Mac)**: Good performance, excellent power efficiency
+- **CPU**: Slowest, but guaranteed compatibility
 
 ## Platform-Specific Notes
 
@@ -235,12 +354,49 @@ def create_data_loaders(batch_size: int = 64):
 
 ## Troubleshooting
 
+### Shell Parsing Errors (zsh: not found)
+
+If you get `zsh: 2.0.0 not found` or similar errors on macOS:
+
+```bash
+# WRONG (shell interprets >= as redirection):
+pip install torch>=2.0.0
+
+# CORRECT (use quotes):
+pip install "torch>=2.0.0"
+
+# Or just install latest:
+pip install torch
+```
+
+The `>=` operator is interpreted by zsh/bash as a shell redirection operator. Always quote package specifications with comparison operators.
+
+### Files Not Found After Git Clone
+
+If `python main.py` says file not found:
+
+```bash
+# Make sure you're on the correct branch
+git branch
+
+# Checkout the feature branch
+git checkout claude/cross-platform-python-setup-Apsdv
+
+# Verify files exist
+ls -l *.py
+
+# You should see: device_utils.py, main.py, model.py, trainer.py
+```
+
 ### MPS Issues
 
 If MPS is detected but fails:
 ```bash
 # Force CPU mode
 python main.py --cpu
+
+# Check MPS availability
+python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
 ```
 
 ### CUDA Out of Memory
@@ -251,6 +407,9 @@ python main.py --batch-size 32
 
 # Reduce dataset size
 python main.py --num-train 500
+
+# Check GPU memory
+nvidia-smi
 ```
 
 ### Import Errors
@@ -258,6 +417,9 @@ python main.py --num-train 500
 ```bash
 # Verify PyTorch installation
 python -c "import torch; print(torch.__version__)"
+
+# Check device detection
+python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:', torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False)"
 
 # Reinstall if needed
 pip install --upgrade torch
