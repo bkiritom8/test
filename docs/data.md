@@ -924,6 +924,489 @@ Training Alerts:
 - Queryable via Log Explorer
 - Retention: 30 days
 
+## DAG-Based Pipeline Orchestration
+
+### Overview
+
+All data pipeline stages (ingestion, processing, validation, training) are orchestrated as a Directed Acyclic Graph (DAG). The DAG executor runs in a containerized environment and manages task dependencies, parallel execution, retries, and failure isolation.
+
+### DAG Structure
+
+**Complete Data Pipeline DAG**:
+```
+┌─────────────────────────────────────────────────────────┐
+│ Data Pipeline DAG (Directed Acyclic Graph)             │
+│                                                         │
+│  ┌──────────────┐                                      │
+│  │   Ingest     │                                      │
+│  │   Ergast     │                                      │
+│  └──────┬───────┘                                      │
+│         │                                               │
+│         ▼                                               │
+│  ┌──────────────┐     ┌──────────────┐                │
+│  │   Ingest     │────>│   Validate   │                │
+│  │   FastF1     │     │   Raw Data   │                │
+│  └──────┬───────┘     └──────┬───────┘                │
+│         │                    │                         │
+│         └────────┬───────────┘                         │
+│                  ▼                                      │
+│           ┌──────────────┐                             │
+│           │   Process    │                             │
+│           │   & Clean    │                             │
+│           └──────┬───────┘                             │
+│                  │                                      │
+│                  ▼                                      │
+│           ┌──────────────┐                             │
+│           │   Feature    │                             │
+│           │  Engineering │                             │
+│           └──────┬───────┘                             │
+│                  │                                      │
+│       ┌──────────┼──────────┐                          │
+│       ▼          ▼          ▼                          │
+│  ┌────────┐ ┌────────┐ ┌────────┐                     │
+│  │ Train  │ │  Val   │ │  Test  │                     │
+│  │ Split  │ │ Split  │ │ Split  │                     │
+│  └────┬───┘ └────┬───┘ └────┬───┘                     │
+│       │          │          │                          │
+│       └──────────┼──────────┘                          │
+│                  ▼                                      │
+│           ┌──────────────┐                             │
+│           │   Driver     │                             │
+│           │   Profiles   │                             │
+│           └──────┬───────┘                             │
+│                  │                                      │
+│                  ▼                                      │
+│           ┌──────────────┐                             │
+│           │   Training   │ (Separate DAG)              │
+│           │   Pipeline   │                             │
+│           └──────────────┘                             │
+└─────────────────────────────────────────────────────────┘
+```
+
+### DAG Node Definitions
+
+**Node**: Ingest Ergast
+```yaml
+task_id: ingest_ergast
+container: gcr.io/f1-strategy/data-ingestion:latest
+command: ["python", "data/download.py", "--source=ergast"]
+dependencies: []
+retry_policy:
+  max_retries: 3
+  retry_delay: 60s
+timeout: 3600s  # 1 hour
+```
+
+**Node**: Ingest FastF1
+```yaml
+task_id: ingest_fastf1
+container: gcr.io/f1-strategy/data-ingestion:latest
+command: ["python", "data/download.py", "--source=fastf1"]
+dependencies: []
+retry_policy:
+  max_retries: 3
+  retry_delay: 120s
+timeout: 21600s  # 6 hours
+```
+
+**Node**: Validate Raw Data
+```yaml
+task_id: validate_raw_data
+container: gcr.io/f1-strategy/data-validator:latest
+command: ["python", "data/validate.py", "--stage=raw"]
+dependencies: [ingest_ergast, ingest_fastf1]
+retry_policy:
+  max_retries: 1
+  retry_delay: 0s
+timeout: 300s  # 5 minutes
+```
+
+**Node**: Process & Clean
+```yaml
+task_id: process_clean
+container: gcr.io/f1-strategy/data-processor:latest
+command: ["python", "data/preprocess.py"]
+dependencies: [validate_raw_data]
+retry_policy:
+  max_retries: 2
+  retry_delay: 30s
+timeout: 7200s  # 2 hours
+```
+
+**Node**: Feature Engineering
+```yaml
+task_id: feature_engineering
+container: gcr.io/f1-strategy/feature-builder:latest
+command: ["python", "data/feature_engineering.py"]
+dependencies: [process_clean]
+retry_policy:
+  max_retries: 2
+  retry_delay: 30s
+timeout: 3600s  # 1 hour
+```
+
+**Parallel Nodes**: Create Data Splits
+```yaml
+# These run in parallel (no dependencies on each other)
+task_id: create_train_split
+container: gcr.io/f1-strategy/data-splitter:latest
+command: ["python", "data/split.py", "--split=train"]
+dependencies: [feature_engineering]
+
+task_id: create_val_split
+container: gcr.io/f1-strategy/data-splitter:latest
+command: ["python", "data/split.py", "--split=validation"]
+dependencies: [feature_engineering]
+
+task_id: create_test_split
+container: gcr.io/f1-strategy/data-splitter:latest
+command: ["python", "data/split.py", "--split=test"]
+dependencies: [feature_engineering]
+```
+
+**Node**: Extract Driver Profiles
+```yaml
+task_id: extract_driver_profiles
+container: gcr.io/f1-strategy/driver-profiler:latest
+command: ["python", "drivers/extract_profiles.py"]
+dependencies: [create_train_split, create_val_split, create_test_split]
+retry_policy:
+  max_retries: 2
+  retry_delay: 60s
+timeout: 1800s  # 30 minutes
+```
+
+### DAG Execution Model
+
+**Orchestrator Container**:
+```dockerfile
+# Dockerfile.dag-orchestrator
+FROM python:3.11-slim
+
+# Install orchestration dependencies
+RUN pip install --no-cache-dir \
+    google-cloud-container \
+    google-cloud-logging \
+    networkx \
+    pyyaml
+
+# Copy orchestrator code
+COPY pipeline/orchestrator/ /app/orchestrator/
+WORKDIR /app
+
+ENTRYPOINT ["python", "-m", "orchestrator.dag_executor"]
+```
+
+**Execution Flow**:
+1. Orchestrator reads DAG definition (YAML)
+2. Builds dependency graph using topological sort
+3. Launches tasks in dependency order
+4. Monitors task containers for completion
+5. Handles retries on failure
+6. Supports partial re-runs (start from failed node)
+7. Emits logs for each DAG run and task
+
+**Parallel Execution**:
+- Tasks with no dependencies run immediately
+- Tasks with satisfied dependencies run in parallel
+- Max concurrent tasks: 10 (configurable)
+
+**Failure Isolation**:
+- Task failure does not fail entire DAG
+- Downstream tasks are skipped if dependency fails
+- Failed tasks can be retried independently
+- Partial re-runs supported (e.g., re-run only failed nodes)
+
+### DAG Definition Format
+
+**File**: `pipeline/orchestrator/dag_definitions/data_pipeline.yaml`
+
+```yaml
+dag_id: f1_data_pipeline
+description: Complete F1 data ingestion and processing pipeline
+schedule: "0 2 * * 1"  # Every Monday at 2:00 AM UTC
+default_timeout: 3600
+default_retries: 2
+
+tasks:
+  - task_id: ingest_ergast
+    container: gcr.io/f1-strategy/data-ingestion:latest
+    command: ["python", "data/download.py", "--source=ergast"]
+    dependencies: []
+    timeout: 3600
+    retries: 3
+
+  - task_id: ingest_fastf1
+    container: gcr.io/f1-strategy/data-ingestion:latest
+    command: ["python", "data/download.py", "--source=fastf1"]
+    dependencies: []
+    timeout: 21600
+    retries: 3
+
+  - task_id: validate_raw_data
+    container: gcr.io/f1-strategy/data-validator:latest
+    command: ["python", "data/validate.py", "--stage=raw"]
+    dependencies: [ingest_ergast, ingest_fastf1]
+    timeout: 300
+    retries: 1
+
+  - task_id: process_clean
+    container: gcr.io/f1-strategy/data-processor:latest
+    command: ["python", "data/preprocess.py"]
+    dependencies: [validate_raw_data]
+    timeout: 7200
+    retries: 2
+
+  # ... (additional tasks)
+
+on_failure:
+  action: notify
+  channels: [slack, pagerduty]
+
+on_success:
+  action: log
+  message: "Data pipeline completed successfully"
+```
+
+## Pipeline Logging
+
+### Centralized Logging Architecture
+
+**Log Collection**:
+- All pipeline tasks emit structured logs
+- Logs streamed to Cloud Logging
+- Logs indexed by DAG run ID and task ID
+- Logs retained independently of task lifecycle
+
+**Log Schema**:
+```json
+{
+  "dag_run_id": "f1_data_pipeline_20260214_120000",
+  "task_id": "ingest_ergast",
+  "timestamp": "2026-02-14T12:00:00Z",
+  "level": "INFO",
+  "event_type": "task_start",
+  "message": "Starting Ergast data ingestion",
+  "metadata": {
+    "container": "gcr.io/f1-strategy/data-ingestion:v1.2.0",
+    "worker_node": "training-worker-3",
+    "attempt": 1
+  }
+}
+```
+
+### Log Event Types
+
+**Task Lifecycle Events**:
+```yaml
+task_start:
+  level: INFO
+  fields: [dag_run_id, task_id, timestamp, container_image]
+
+task_end:
+  level: INFO
+  fields: [dag_run_id, task_id, timestamp, duration_seconds, status]
+
+task_retry:
+  level: WARNING
+  fields: [dag_run_id, task_id, attempt_number, reason, next_retry_time]
+
+task_failure:
+  level: ERROR
+  fields: [dag_run_id, task_id, error_type, error_message, stack_trace]
+
+task_success:
+  level: INFO
+  fields: [dag_run_id, task_id, output_artifacts, metrics]
+```
+
+**Validation Events**:
+```yaml
+validation_error:
+  level: ERROR
+  fields: [dag_run_id, task_id, validation_rule, failed_value, expected_value]
+
+data_quality_warning:
+  level: WARNING
+  fields: [dag_run_id, task_id, metric_name, measured_value, threshold]
+```
+
+**Progress Events**:
+```yaml
+progress_update:
+  level: INFO
+  fields: [dag_run_id, task_id, records_processed, total_records, percent_complete]
+```
+
+### Logging Implementation
+
+**File**: `pipeline/logging/logger.py`
+
+```python
+import logging
+import json
+from google.cloud import logging as cloud_logging
+from datetime import datetime
+
+class PipelineLogger:
+    """Centralized logger for pipeline tasks."""
+
+    def __init__(self, dag_run_id: str, task_id: str):
+        self.dag_run_id = dag_run_id
+        self.task_id = task_id
+
+        # Initialize Cloud Logging
+        self.client = cloud_logging.Client()
+        self.logger = self.client.logger('f1-pipeline')
+
+    def log_event(self, event_type: str, level: str, message: str, **metadata):
+        """Emit structured log event."""
+
+        log_entry = {
+            'dag_run_id': self.dag_run_id,
+            'task_id': self.task_id,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'level': level,
+            'event_type': event_type,
+            'message': message,
+            'metadata': metadata
+        }
+
+        # Write to Cloud Logging
+        self.logger.log_struct(log_entry, severity=level)
+
+    def task_start(self, container: str, attempt: int = 1):
+        """Log task start event."""
+        self.log_event(
+            event_type='task_start',
+            level='INFO',
+            message=f'Starting task {self.task_id}',
+            container=container,
+            attempt=attempt
+        )
+
+    def task_end(self, status: str, duration_seconds: float):
+        """Log task end event."""
+        self.log_event(
+            event_type='task_end',
+            level='INFO',
+            message=f'Task {self.task_id} completed with status {status}',
+            status=status,
+            duration_seconds=duration_seconds
+        )
+
+    def task_retry(self, attempt: int, reason: str, next_retry_time: str):
+        """Log task retry event."""
+        self.log_event(
+            event_type='task_retry',
+            level='WARNING',
+            message=f'Retrying task {self.task_id} (attempt {attempt})',
+            attempt_number=attempt,
+            reason=reason,
+            next_retry_time=next_retry_time
+        )
+
+    def task_failure(self, error_type: str, error_message: str, stack_trace: str):
+        """Log task failure event."""
+        self.log_event(
+            event_type='task_failure',
+            level='ERROR',
+            message=f'Task {self.task_id} failed: {error_message}',
+            error_type=error_type,
+            error_message=error_message,
+            stack_trace=stack_trace
+        )
+
+    def validation_error(self, rule: str, failed_value: str, expected_value: str):
+        """Log validation error."""
+        self.log_event(
+            event_type='validation_error',
+            level='ERROR',
+            message=f'Validation failed: {rule}',
+            validation_rule=rule,
+            failed_value=failed_value,
+            expected_value=expected_value
+        )
+
+    def progress_update(self, records_processed: int, total_records: int):
+        """Log progress update."""
+        percent = (records_processed / total_records) * 100 if total_records > 0 else 0
+        self.log_event(
+            event_type='progress_update',
+            level='INFO',
+            message=f'Progress: {percent:.1f}% ({records_processed}/{total_records})',
+            records_processed=records_processed,
+            total_records=total_records,
+            percent_complete=percent
+        )
+```
+
+### Log Retention Policy
+
+```yaml
+Retention:
+  task_logs: 30 days
+  validation_errors: 90 days
+  dag_run_metadata: 1 year
+  audit_logs: 1 year
+
+Storage:
+  primary: Cloud Logging
+  archive: BigQuery table (f1_strategy.pipeline_logs)
+  export_schedule: Daily at 01:00 UTC
+```
+
+### Log Querying
+
+**Query DAG Run Logs**:
+```sql
+-- BigQuery query for DAG run logs
+SELECT
+  timestamp,
+  task_id,
+  event_type,
+  message,
+  metadata
+FROM f1_strategy.pipeline_logs
+WHERE dag_run_id = 'f1_data_pipeline_20260214_120000'
+ORDER BY timestamp ASC;
+```
+
+**Query Failed Tasks**:
+```sql
+-- Find all failed tasks in last 7 days
+SELECT
+  dag_run_id,
+  task_id,
+  timestamp,
+  metadata.error_message
+FROM f1_strategy.pipeline_logs
+WHERE event_type = 'task_failure'
+  AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+ORDER BY timestamp DESC;
+```
+
+### Monitoring Dashboard Integration
+
+**Cloud Monitoring Metrics** (derived from logs):
+```yaml
+pipeline.dag.run_duration_seconds:
+  type: gauge
+  labels: [dag_id, status]
+
+pipeline.task.failure_count:
+  type: counter
+  labels: [dag_id, task_id, error_type]
+
+pipeline.task.retry_count:
+  type: counter
+  labels: [dag_id, task_id]
+
+pipeline.validation.error_count:
+  type: counter
+  labels: [validation_rule]
+```
+
 ## Future Enhancements
 
 - **Real-Time Telemetry**: Integrate live race feeds (requires FIA partnership)
@@ -933,12 +1416,14 @@ Training Alerts:
 - **Multi-Series**: Extend to Formula E, IndyCar, WEC (similar data structure)
 - **Federated Learning**: Train on team-specific data without centralizing
 - **AutoML Integration**: Automated hyperparameter tuning via Vertex AI AutoML
+- **Dynamic DAG Generation**: Auto-generate DAG based on available data sources
+- **Conditional Execution**: Skip tasks based on runtime conditions (e.g., no new data)
 
 ---
 
 **See Also**:
 - CLAUDE.md: High-level project overview
-- docs/training-pipeline.md: Detailed training infrastructure specifications
+- docs/training-pipeline.md: Distributed training with DAG integration
+- docs/architecture.md: DAG orchestration architecture
 - docs/models.md: How data flows into ML models
-- docs/architecture.md: System design, deployment
 - docs/metrics.md: Data quality KPIs

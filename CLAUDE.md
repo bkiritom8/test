@@ -101,7 +101,8 @@ Build a production-grade, real-time F1 race strategy system delivering lap-by-la
 
 ### ML Stack
 - **Training Pipeline**: Distributed containerized jobs, autoscaling workers
-- **Orchestration**: Vertex AI Pipelines, Terraform-managed infrastructure
+- **Orchestration**: DAG-based pipeline execution, containerized orchestrator
+- **Pipeline Structure**: Directed Acyclic Graph (explicit dependencies, parallel execution)
 - **Compute**: Autoscaling worker pools (CPU/GPU abstracted)
 - **Registry**: Vertex AI MLflow-compatible
 - **Libraries**: pandas, NumPy, scikit-learn, TensorFlow, Dataflow SDK
@@ -114,10 +115,11 @@ Build a production-grade, real-time F1 race strategy system delivering lap-by-la
 - **Dashboard**: React 18 + Next.js (TypeScript), Recharts, Tailwind CSS
 
 ### Monitoring
-- **Logging**: Cloud Logging
+- **Logging**: Centralized pipeline logging (per DAG run, per task)
 - **Metrics**: Cloud Monitoring
 - **Alerting**: Custom Pub/Sub + Slack integration
 - **Drift Detection**: Weekly automated validation
+- **Pipeline Observability**: DAG execution tracking, task-level logs, retry history
 
 ## Repository Structure
 
@@ -149,13 +151,19 @@ f1-strategy-optimizer/
 │   ├── race_simulator.py # 10K scenario engine
 │   └── optimizer.py      # Strategy selection logic
 │
-├── pipeline/             # Real-time streaming & training
-│   ├── dataflow_job.py   # Beam pipeline
+├── pipeline/             # DAG-based orchestration & execution
+│   ├── orchestrator/     # DAG orchestration engine
+│   │   ├── dag_executor.py    # DAG execution engine
+│   │   ├── task_runner.py     # Task container launcher
+│   │   └── dag_definitions/   # Pipeline DAG definitions
+│   ├── dataflow_job.py   # Beam streaming pipeline
 │   ├── feature_extraction.py
-│   └── training/         # Distributed training infrastructure
-│       ├── orchestrator.py    # Training job scheduler
-│       ├── worker.py          # Training worker container
-│       └── config.yaml        # Training pipeline config
+│   ├── training/         # Distributed training infrastructure
+│   │   ├── worker.py          # Training worker container
+│   │   └── config.yaml        # Training pipeline config
+│   └── logging/          # Pipeline logging infrastructure
+│       ├── logger.py          # Centralized logging client
+│       └── log_schema.json    # Log event schema
 │
 ├── serving/              # API deployment
 │   └── api.py            # FastAPI endpoints
@@ -200,9 +208,11 @@ f1-strategy-optimizer/
 |-----------|--------|-------|-------|
 | Data Ingestion | Not Started | Data Engineer | Ergast API + FastF1 |
 | BigQuery Setup | Not Started | Data Architect | Schema definition needed |
+| DAG Orchestrator | Not Started | Platform Engineer | Containerized DAG executor |
+| Pipeline Logging | Not Started | Platform Engineer | Centralized task logging |
 | Driver Profiles | Not Started | Data Scientist | 200+ profiles target |
 | Feature Store | Not Started | Data Engineer | f1_features table |
-| Training Infrastructure | Not Started | MLOps Engineer | Terraform, Vertex AI Pipelines |
+| Training Infrastructure | Not Started | MLOps Engineer | Terraform-managed compute |
 | Training Pipeline | Not Started | ML Engineer | Distributed, containerized jobs |
 | ML Models (4) | Not Started | ML Engineer | Train all 4 in parallel |
 | Monte Carlo Sim | Not Started | ML Engineer | 10K scenarios |
@@ -296,10 +306,10 @@ f1-strategy-optimizer/
 
 ### Documentation
 - [x] Create CLAUDE.md (this file)
-- [ ] Create docs/data.md
+- [x] Create docs/data.md (with DAG orchestration)
 - [ ] Create docs/models.md
-- [ ] Create docs/architecture.md
-- [ ] Create docs/training-pipeline.md
+- [ ] Create docs/architecture.md (DAG structure, logging)
+- [x] Create docs/training-pipeline.md (DAG integration)
 - [ ] Create docs/metrics.md
 - [ ] Create docs/monitoring.md
 - [ ] Create docs/roadmap.md

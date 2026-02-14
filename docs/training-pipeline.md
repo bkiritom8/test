@@ -4,15 +4,171 @@
 
 ## Overview
 
-The F1 Strategy Optimizer training pipeline executes ML model training as isolated, containerized stages within the existing data processing orchestration layer. Training jobs are horizontally scalable, fault-tolerant, and secured with least-privilege access controls.
+The F1 Strategy Optimizer training pipeline executes ML model training as isolated, containerized stages within the DAG-based orchestration layer. Training jobs are horizontally scalable, fault-tolerant, and secured with least-privilege access controls.
 
 **Key Principles**:
-- Training is a pipeline stage, not a separate system
+- Training is a DAG node, not a separate system
 - Container-native execution (framework-agnostic)
 - Reads from processed storage only
 - Writes artifacts to dedicated storage
-- Integrated with existing orchestration
+- Integrated with DAG orchestrator
 - Hardware-agnostic (CPU/GPU abstracted)
+- Centralized pipeline logging
+
+---
+
+## DAG Integration
+
+### Training as DAG Nodes
+
+Training jobs are defined as nodes in the pipeline DAG with explicit dependencies on data preparation stages. Each model training task is a separate DAG node, enabling parallel training of multiple models.
+
+**Training DAG Structure**:
+```
+┌─────────────────────────────────────────────────────────┐
+│ Training Pipeline DAG                                   │
+│                                                         │
+│  ┌──────────────┐                                      │
+│  │ Data Splits  │  (Dependency from data pipeline)     │
+│  │   Ready      │                                      │
+│  └──────┬───────┘                                      │
+│         │                                               │
+│         ▼                                               │
+│  ┌──────────────┐                                      │
+│  │  Validate    │                                      │
+│  │ Training Data│                                      │
+│  └──────┬───────┘                                      │
+│         │                                               │
+│         └───────┬─────────┬─────────┬─────────┐        │
+│                 ▼         ▼         ▼         ▼        │
+│          ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐│
+│          │  Train  │ │  Train  │ │  Train  │ │  Train  ││
+│          │  Tire   │ │  Fuel   │ │  Brake  │ │ Driving ││
+│          │  Deg    │ │  Cons   │ │  Bias   │ │  Style  ││
+│          └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘│
+│               │           │           │           │      │
+│               └───────────┼───────────┼───────────┘      │
+│                           ▼           ▼                  │
+│                    ┌──────────┐ ┌──────────┐            │
+│                    │ Evaluate │ │ Register │            │
+│                    │  Models  │ │  Models  │            │
+│                    └──────────┘ └──────────┘            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Parallel Execution**: The 4 model training tasks (Tire Degradation, Fuel Consumption, Brake Bias, Driving Style) run in parallel since they have no inter-dependencies, maximizing throughput.
+
+**Non-Blocking Design**: Training DAG runs independently and does not block:
+- Real-time inference pipelines
+- Streaming data ingestion (Dataflow)
+- Dashboard queries
+- Other pipeline stages
+
+### Training DAG Definition
+
+**File**: `pipeline/orchestrator/dag_definitions/training_pipeline.yaml`
+
+```yaml
+dag_id: f1_training_pipeline
+description: Distributed training for F1 strategy models
+schedule: "0 2 * * 1"  # Every Monday at 2:00 AM UTC (after data pipeline)
+depends_on: [f1_data_pipeline]  # Wait for data pipeline completion
+
+tasks:
+  - task_id: validate_training_data
+    container: gcr.io/f1-strategy/data-validator:latest
+    command: ["python", "pipeline/training/validate.py", "--split=train"]
+    dependencies: []
+    timeout: 300
+    retries: 1
+
+  - task_id: train_tire_degradation
+    container: gcr.io/f1-strategy/training-worker:latest
+    command:
+      - python
+      - -m
+      - training.worker
+      - --model-type=tire_degradation
+      - --num-workers=4
+    dependencies: [validate_training_data]
+    timeout: 14400  # 4 hours
+    retries: 2
+    resources:
+      cpu: 16
+      memory: 64Gi
+
+  - task_id: train_fuel_consumption
+    container: gcr.io/f1-strategy/training-worker:latest
+    command:
+      - python
+      - -m
+      - training.worker
+      - --model-type=fuel_consumption
+      - --num-workers=4
+    dependencies: [validate_training_data]
+    timeout: 14400  # 4 hours
+    retries: 2
+    resources:
+      cpu: 16
+      memory: 64Gi
+
+  - task_id: train_brake_bias
+    container: gcr.io/f1-strategy/training-worker:latest
+    command:
+      - python
+      - -m
+      - training.worker
+      - --model-type=brake_bias
+      - --num-workers=2
+    dependencies: [validate_training_data]
+    timeout: 7200  # 2 hours
+    retries: 2
+    resources:
+      cpu: 8
+      memory: 32Gi
+
+  - task_id: train_driving_style
+    container: gcr.io/f1-strategy/training-worker:latest
+    command:
+      - python
+      - -m
+      - training.worker
+      - --model-type=driving_style
+      - --num-workers=4
+    dependencies: [validate_training_data]
+    timeout: 10800  # 3 hours
+    retries: 2
+    resources:
+      cpu: 16
+      memory: 64Gi
+
+  - task_id: evaluate_models
+    container: gcr.io/f1-strategy/evaluator:latest
+    command: ["python", "models/evaluate.py", "--split=test"]
+    dependencies:
+      - train_tire_degradation
+      - train_fuel_consumption
+      - train_brake_bias
+      - train_driving_style
+    timeout: 1800  # 30 minutes
+    retries: 1
+
+  - task_id: register_models
+    container: gcr.io/f1-strategy/model-registry:latest
+    command: ["python", "models/register.py"]
+    dependencies: [evaluate_models]
+    timeout: 600  # 10 minutes
+    retries: 2
+
+on_failure:
+  action: notify
+  channels: [slack, pagerduty]
+  message: "Training pipeline failed"
+
+on_success:
+  action: log
+  message: "Training pipeline completed successfully"
+```
 
 ---
 
@@ -20,32 +176,26 @@ The F1 Strategy Optimizer training pipeline executes ML model training as isolat
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│ Orchestration Layer (Vertex AI Pipelines)             │
+│ DAG Orchestrator (Containerized)                       │
 │                                                        │
 │  ┌──────────┐   ┌──────────┐   ┌──────────┐          │
 │  │ Ingest   │──>│ Process  │──>│ Validate │          │
-│  │ Stage    │   │ Stage    │   │ Stage    │          │
+│  │  (DAG)   │   │  (DAG)   │   │  (DAG)   │          │
 │  └──────────┘   └──────────┘   └──────────┘          │
 │                                      │                 │
 │                                      ▼                 │
 │                            ┌──────────────────┐       │
-│                            │ Training Stage   │       │
+│                            │ Training (DAG)   │       │
 │                            │  (Distributed)   │       │
 │                            └──────────────────┘       │
 │                                      │                 │
 │                                      ▼                 │
 │  ┌──────────┐   ┌──────────┐   ┌──────────┐          │
 │  │ Evaluate │──>│ Register │──>│  Serve   │          │
-│  │ Stage    │   │ Stage    │   │  Stage   │          │
+│  │  (DAG)   │   │  (DAG)   │   │  (DAG)   │          │
 │  └──────────┘   └──────────┘   └──────────┘          │
 └────────────────────────────────────────────────────────┘
 ```
-
-**Non-Blocking Design**: Training stages run independently and do not block:
-- Real-time inference pipelines
-- Streaming data ingestion (Dataflow)
-- Dashboard queries
-- Other pipeline stages
 
 ---
 
@@ -995,6 +1145,293 @@ Storage: Cloud Logging + exported to BigQuery
 
 ---
 
+## Training Pipeline Logging
+
+### Centralized Logging Integration
+
+All training tasks emit structured logs to the centralized pipeline logging system. Logs are indexed by DAG run ID and task ID, enabling easy correlation across distributed workers.
+
+**Training-Specific Log Events**:
+
+```yaml
+training_start:
+  level: INFO
+  fields:
+    - dag_run_id
+    - task_id
+    - model_type
+    - num_workers
+    - data_split
+    - hyperparameters
+
+training_progress:
+  level: INFO
+  fields:
+    - dag_run_id
+    - task_id
+    - epoch
+    - iteration
+    - loss
+    - accuracy
+    - records_processed
+
+training_checkpoint:
+  level: INFO
+  fields:
+    - dag_run_id
+    - task_id
+    - checkpoint_uri
+    - epoch
+    - iteration
+
+training_end:
+  level: INFO
+  fields:
+    - dag_run_id
+    - task_id
+    - status
+    - duration_seconds
+    - final_loss
+    - final_accuracy
+    - model_uri
+
+worker_start:
+  level: INFO
+  fields:
+    - dag_run_id
+    - task_id
+    - worker_index
+    - total_workers
+    - node_name
+
+worker_failure:
+  level: ERROR
+  fields:
+    - dag_run_id
+    - task_id
+    - worker_index
+    - error_type
+    - error_message
+    - stack_trace
+
+model_evaluation:
+  level: INFO
+  fields:
+    - dag_run_id
+    - task_id
+    - model_type
+    - test_loss
+    - test_accuracy
+    - evaluation_metrics
+```
+
+### Logging Implementation in Training Workers
+
+**File**: `pipeline/training/worker.py`
+
+```python
+from pipeline.logging.logger import PipelineLogger
+import os
+import time
+
+class DistributedTrainer:
+    """Distributed training worker with centralized logging."""
+
+    def __init__(self, model_type: str, data_split: str, num_workers: int, worker_index: int, job_id: str):
+        self.model_type = model_type
+        self.data_split = data_split
+        self.num_workers = num_workers
+        self.worker_index = worker_index
+        self.job_id = job_id
+
+        # Initialize centralized logger
+        dag_run_id = os.getenv('DAG_RUN_ID')
+        task_id = os.getenv('TASK_ID')
+        self.logger = PipelineLogger(dag_run_id, task_id)
+
+    def run(self):
+        """Execute training with comprehensive logging."""
+
+        start_time = time.time()
+
+        # Log training start
+        self.logger.log_event(
+            event_type='training_start',
+            level='INFO',
+            message=f'Starting training for {self.model_type}',
+            model_type=self.model_type,
+            num_workers=self.num_workers,
+            data_split=self.data_split,
+            worker_index=self.worker_index
+        )
+
+        try:
+            # Load data
+            data = self.load_data()
+
+            # Train model
+            for epoch in range(self.num_epochs):
+                for iteration, batch in enumerate(data):
+                    # Training step
+                    loss, accuracy = self.train_step(batch)
+
+                    # Log progress every 100 iterations
+                    if iteration % 100 == 0:
+                        self.logger.log_event(
+                            event_type='training_progress',
+                            level='INFO',
+                            message=f'Epoch {epoch}, Iteration {iteration}',
+                            epoch=epoch,
+                            iteration=iteration,
+                            loss=float(loss),
+                            accuracy=float(accuracy)
+                        )
+
+                # Checkpoint after each epoch
+                checkpoint_uri = self.save_checkpoint(epoch)
+                self.logger.log_event(
+                    event_type='training_checkpoint',
+                    level='INFO',
+                    message=f'Saved checkpoint at epoch {epoch}',
+                    checkpoint_uri=checkpoint_uri,
+                    epoch=epoch
+                )
+
+            # Save final model
+            model_uri = self.save_model()
+
+            # Log training end
+            duration = time.time() - start_time
+            self.logger.log_event(
+                event_type='training_end',
+                level='INFO',
+                message=f'Training completed for {self.model_type}',
+                status='success',
+                duration_seconds=duration,
+                model_uri=model_uri
+            )
+
+            return model_uri
+
+        except Exception as e:
+            # Log training failure
+            self.logger.task_failure(
+                error_type=type(e).__name__,
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+            raise
+
+    def load_data(self):
+        """Load training data with logging."""
+        self.logger.log_event(
+            event_type='data_loading',
+            level='INFO',
+            message=f'Loading data split: {self.data_split}',
+            data_split=self.data_split
+        )
+        # ... data loading logic
+```
+
+### Log Querying for Training
+
+**Query Training Progress**:
+```sql
+-- BigQuery query for training progress
+SELECT
+  timestamp,
+  metadata.epoch,
+  metadata.iteration,
+  metadata.loss,
+  metadata.accuracy
+FROM f1_strategy.pipeline_logs
+WHERE task_id = 'train_tire_degradation'
+  AND event_type = 'training_progress'
+  AND dag_run_id = 'f1_training_pipeline_20260214_020000'
+ORDER BY timestamp ASC;
+```
+
+**Query Failed Workers**:
+```sql
+-- Find failed workers in training job
+SELECT
+  timestamp,
+  metadata.worker_index,
+  metadata.error_type,
+  metadata.error_message
+FROM f1_strategy.pipeline_logs
+WHERE event_type = 'worker_failure'
+  AND dag_run_id = 'f1_training_pipeline_20260214_020000'
+ORDER BY timestamp DESC;
+```
+
+**Training Run Summary**:
+```sql
+-- Generate training run summary
+SELECT
+  task_id,
+  MIN(CASE WHEN event_type = 'training_start' THEN timestamp END) as start_time,
+  MAX(CASE WHEN event_type = 'training_end' THEN timestamp END) as end_time,
+  MAX(CASE WHEN event_type = 'training_end' THEN metadata.duration_seconds END) as duration_seconds,
+  MAX(CASE WHEN event_type = 'training_end' THEN metadata.final_loss END) as final_loss,
+  MAX(CASE WHEN event_type = 'training_end' THEN metadata.final_accuracy END) as final_accuracy,
+  MAX(CASE WHEN event_type = 'training_end' THEN metadata.model_uri END) as model_uri
+FROM f1_strategy.pipeline_logs
+WHERE dag_run_id = 'f1_training_pipeline_20260214_020000'
+  AND task_id LIKE 'train_%'
+GROUP BY task_id;
+```
+
+### Training Monitoring Dashboard
+
+**Cloud Monitoring Metrics** (derived from training logs):
+```yaml
+training.model.loss:
+  type: gauge
+  labels: [model_type, epoch]
+  description: Training loss per epoch
+
+training.model.accuracy:
+  type: gauge
+  labels: [model_type, epoch]
+  description: Training accuracy per epoch
+
+training.worker.failure_count:
+  type: counter
+  labels: [model_type, worker_index, error_type]
+  description: Worker failure count
+
+training.checkpoint.count:
+  type: counter
+  labels: [model_type]
+  description: Number of checkpoints saved
+
+training.duration_seconds:
+  type: gauge
+  labels: [model_type, status]
+  description: Total training duration
+```
+
+**Alerting Rules**:
+```yaml
+training_stalled:
+  condition: no training_progress events in 30 minutes
+  severity: warning
+  action: notify_slack
+
+worker_failure_rate_high:
+  condition: worker_failure_count > 3 in 1 hour
+  severity: critical
+  action: notify_pagerduty
+
+training_duration_exceeded:
+  condition: training_duration_seconds > 14400  # 4 hours
+  severity: warning
+  action: notify_slack
+```
+
+---
+
 ## Production Readiness Checklist
 
 ### Pre-Deployment
@@ -1007,6 +1444,8 @@ Storage: Cloud Logging + exported to BigQuery
 - [ ] Checkpoint/restore logic tested
 - [ ] Monitoring dashboards configured
 - [ ] Alerting rules deployed
+- [ ] DAG definitions validated and tested
+- [ ] Centralized logging integration verified
 
 ### Post-Deployment
 
@@ -1016,13 +1455,16 @@ Storage: Cloud Logging + exported to BigQuery
 - [ ] Test failure scenarios (worker crash, OOM, etc.)
 - [ ] Verify cost tracking and budgets
 - [ ] Conduct security review (IAM, network, secrets)
+- [ ] Test DAG retry and partial re-run logic
+- [ ] Verify logs are queryable in BigQuery
 - [ ] Document runbook for on-call engineers
 
 ---
 
 **See Also**:
 - CLAUDE.md: High-level project overview
-- docs/data.md: Training data sources and schemas
-- docs/architecture.md: Overall system design
+- docs/data.md: DAG orchestration and pipeline logging
+- docs/architecture.md: Overall DAG execution model
 - docs/monitoring.md: Operational monitoring details
 - infrastructure/terraform/: Infrastructure as code
+- pipeline/orchestrator/dag_definitions/: DAG definitions
