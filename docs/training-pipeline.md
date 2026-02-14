@@ -1432,6 +1432,807 @@ training_duration_exceeded:
 
 ---
 
+## Operational Guarantees
+
+### Observability
+
+Training pipeline emits comprehensive metrics for full visibility into distributed training execution.
+
+**Training-Specific Metrics** (per DAG run, per task, per worker):
+
+```yaml
+Training Job Metrics:
+  training.job.duration_seconds:
+    type: gauge
+    labels: [model_type, dag_run_id, status]
+    description: Total training job duration
+    aggregations: [p50, p95, p99]
+    slo:
+      tire_degradation: <14400s  # 4 hours
+      fuel_consumption: <14400s
+      brake_bias: <7200s         # 2 hours
+      driving_style: <10800s     # 3 hours
+
+  training.job.success_count:
+    type: counter
+    labels: [model_type]
+    description: Successful training job completions
+
+  training.job.failure_count:
+    type: counter
+    labels: [model_type, failure_reason]
+    description: Failed training jobs
+
+  training.job.retry_count:
+    type: counter
+    labels: [model_type, attempt_number]
+    description: Training job retries
+
+  training.job.queue_delay_seconds:
+    type: gauge
+    labels: [model_type]
+    description: Time between job submission and start
+    slo: <300s  # 5 minutes
+
+Worker-Level Metrics:
+  training.worker.cpu_utilization:
+    type: gauge
+    labels: [job_id, worker_index, model_type]
+    description: Worker CPU utilization (0-100%)
+    alert_threshold: >95% for >30min
+
+  training.worker.memory_usage_bytes:
+    type: gauge
+    labels: [job_id, worker_index]
+    description: Worker memory usage
+    alert_threshold: >90% of limit
+
+  training.worker.gpu_utilization:
+    type: gauge
+    labels: [job_id, worker_index]
+    description: GPU utilization (if applicable)
+    alert_threshold: <20% for >1hr (underutilization)
+
+  training.worker.heartbeat_timestamp:
+    type: gauge
+    labels: [job_id, worker_index]
+    description: Last worker heartbeat (for liveness check)
+    alert_threshold: no heartbeat in 2 minutes
+
+Training Progress Metrics:
+  training.progress.epoch:
+    type: gauge
+    labels: [job_id, model_type]
+    description: Current training epoch
+
+  training.progress.iteration:
+    type: counter
+    labels: [job_id, model_type]
+    description: Training iterations completed
+
+  training.progress.records_processed:
+    type: counter
+    labels: [job_id, worker_index]
+    description: Training records processed
+
+  training.model.loss:
+    type: gauge
+    labels: [model_type, epoch, split]
+    description: Training/validation loss per epoch
+
+  training.model.accuracy:
+    type: gauge
+    labels: [model_type, epoch, split]
+    description: Training/validation accuracy per epoch
+
+  training.checkpoint.count:
+    type: counter
+    labels: [job_id, model_type]
+    description: Checkpoints saved
+
+Data Quality Metrics:
+  training.data.validation_errors:
+    type: counter
+    labels: [model_type, validation_rule]
+    description: Pre-training data validation errors
+```
+
+**Training Alerting Rules**:
+
+```yaml
+Critical Alerts:
+  - name: training_job_timeout
+    condition: training.job.duration_seconds > 14400  # 4 hours
+    severity: critical
+    channels: [pagerduty, slack]
+    action: Terminate job, investigate
+
+  - name: repeated_training_failures
+    condition: training.job.failure_count > 2 in 24 hours for same model_type
+    severity: critical
+    channels: [pagerduty]
+    action: Block new training jobs, alert ML team
+
+  - name: worker_oom
+    condition: training.worker.memory_usage_bytes / limits.memory > 0.95
+    severity: critical
+    channels: [slack]
+    action: Auto-retry with larger instance (n1-highmem)
+
+  - name: worker_unresponsive
+    condition: no training.worker.heartbeat in 2 minutes
+    severity: critical
+    channels: [slack]
+    action: Restart worker, resume from checkpoint
+
+  - name: data_validation_failure
+    condition: training.data.validation_errors > 0
+    severity: critical
+    channels: [slack]
+    action: Block training job, alert data team
+
+Warning Alerts:
+  - name: training_stalled
+    condition: no training.progress.iteration increment in 30 minutes
+    severity: warning
+    channels: [slack]
+    action: Check worker logs, may need restart
+
+  - name: high_training_retry_rate
+    condition: rate(training.job.retry_count[24h]) > 0.3
+    severity: warning
+    channels: [slack]
+    action: Investigate infrastructure issues
+
+  - name: gpu_underutilization
+    condition: training.worker.gpu_utilization < 20% for >1 hour
+    severity: warning
+    channels: [slack]
+    action: Review model architecture, may not need GPU
+
+  - name: training_queue_backlog
+    condition: training.job.queue_delay_seconds > 600s  # 10 minutes
+    severity: warning
+    channels: [slack]
+    action: Increase worker pool max_replicas
+```
+
+**Observability Dashboards**:
+
+```yaml
+Training Dashboard Panels:
+  1. Job Status Overview:
+     - Active training jobs (by model type)
+     - Job duration (current, p95, max)
+     - Success/failure rate (last 7 days)
+     - Queue depth and delay
+
+  2. Worker Health:
+     - Worker count (current, target, max)
+     - CPU/Memory/GPU utilization per worker
+     - Worker heartbeats (liveness map)
+     - Failed worker count
+
+  3. Training Progress:
+     - Loss curves (training, validation)
+     - Accuracy trends per epoch
+     - Records processed per second
+     - ETA to completion
+
+  4. Cost & Resource Usage:
+     - Current spend (hourly rate)
+     - Projected cost to completion
+     - Resource allocation vs limits
+     - Cost per model (historical)
+
+  5. Data Quality:
+     - Validation error rate
+     - Data completeness score
+     - Feature drift detection
+     - Training data freshness
+```
+
+### Cost Controls
+
+Training pipeline enforces strict cost controls to prevent budget overruns on compute-intensive workloads.
+
+**Training Job Resource Limits**:
+
+```yaml
+Per-Model Resource Limits:
+  tire_degradation:
+    cpu_limit: 16 cores
+    memory_limit: 64Gi
+    max_workers: 4
+    timeout: 14400s  # 4 hours
+    max_cost_per_run: $8.00
+    estimated_cost: $5-7
+
+  fuel_consumption:
+    cpu_limit: 16 cores
+    memory_limit: 64Gi
+    max_workers: 4
+    timeout: 14400s
+    max_cost_per_run: $8.00
+    estimated_cost: $5-7
+
+  brake_bias:
+    cpu_limit: 8 cores
+    memory_limit: 32Gi
+    max_workers: 2
+    timeout: 7200s  # 2 hours
+    max_cost_per_run: $3.00
+    estimated_cost: $2-3
+
+  driving_style:
+    cpu_limit: 16 cores
+    memory_limit: 64Gi
+    max_workers: 4
+    timeout: 10800s  # 3 hours
+    max_cost_per_run: $6.00
+    estimated_cost: $4-6
+
+# Hard limits enforced at orchestrator level
+# Jobs terminated if limits exceeded
+```
+
+**Max Runtime Enforcement**:
+
+```yaml
+Training Job Timeouts:
+  per_model_timeout: defined above
+  total_training_dag_timeout: 57600s  # 16 hours (all 4 models in sequence)
+
+Timeout Actions:
+  - Task terminated gracefully (SIGTERM)
+  - 30-second grace period for cleanup
+  - Force kill if not terminated (SIGKILL)
+  - Checkpoint saved before termination (if possible)
+  - Failure logged with reason: "timeout_exceeded"
+  - No automatic retry on timeout (manual investigation required)
+```
+
+**Autoscaling Bounds (Training Compute)**:
+
+```yaml
+Training Worker Pool:
+  min_replicas: 0  # Scale to zero when idle
+  max_replicas: 20  # Hard cap to prevent runaway costs
+
+  scale_up_policy:
+    trigger: training_jobs_queued > 0
+    increment: min(jobs_queued * avg_workers_per_job, max_replicas - current)
+    cooldown: 60s
+
+  scale_down_policy:
+    trigger: idle_workers > 0 for >300s  # 5 minutes
+    decrement: idle_workers
+    cooldown: 300s
+    grace_period: 60s  # Allow checkpointing before termination
+
+  cost_guardrails:
+    max_hourly_spend: $50
+    action_on_exceed: pause_autoscaling, alert_devops
+```
+
+**Budget Thresholds & Throttling** (Training-Specific):
+
+```yaml
+Training Budget (Monthly):
+  allocated: $120
+  breakdown:
+    weekly_retraining: $80  # 4 models × $20/week
+    ad_hoc_experiments: $30
+    infrastructure_overhead: $10
+
+Budget Actions:
+  $96 (80% of training budget):
+    action: warning_alert
+    channels: [slack]
+    message: "Training budget 80% consumed"
+
+  $108 (90% of training budget):
+    action: throttle_training
+    scope:
+      - Pause weekly scheduled retraining
+      - Allow only critical manual jobs
+      - Reduce max_workers by 50%
+      - Alert ML team
+
+  $120 (100% of training budget):
+    action: block_training
+    scope:
+      - Block all new training jobs
+      - Allow running jobs to complete
+      - Scale worker pool to zero after completion
+      - Require manual approval for new jobs
+
+  $150 (125% overage):
+    action: emergency_stop
+    scope:
+      - Terminate all running training jobs
+      - Save checkpoints before termination
+      - Scale to zero immediately
+      - Require director approval to restart
+```
+
+**Training Job Throttling**:
+
+```yaml
+Throttle Conditions:
+  budget_threshold_exceeded:
+    action: pause_scheduled_jobs
+    scope: weekly retraining only (manual jobs still allowed)
+
+  consecutive_failures:
+    condition: 3+ failures for same model in 24 hours
+    action: block_model_training
+    duration: 24 hours or until manual review
+
+  resource_exhaustion:
+    condition: max_replicas reached and jobs queued
+    action: queue_jobs
+    max_queue_size: 10
+    overflow_action: reject_new_jobs
+
+Throttle Overrides:
+  critical_training_job:
+    label: "priority:critical"
+    bypass: budget_throttle (but not emergency_stop)
+    approval: ML team lead required
+```
+
+**Cost Visibility (Training Pipeline)**:
+
+```yaml
+Training Cost Metrics:
+  cost.training.job_total:
+    type: gauge
+    labels: [model_type, dag_run_id]
+    description: Total cost for training job
+
+  cost.training.worker_hours:
+    type: counter
+    labels: [model_type, instance_type]
+    description: Worker-hours consumed
+
+  cost.training.storage_io:
+    type: gauge
+    labels: [model_type]
+    description: Storage I/O cost (checkpoints, artifacts)
+
+  cost.training.cumulative_week:
+    type: counter
+    labels: [model_type]
+    description: Weekly training spend
+    reset: Weekly on Monday 00:00 UTC
+
+  cost.training.projected_month:
+    type: gauge
+    description: Projected monthly training cost based on current rate
+    alert_threshold: >$120
+```
+
+**Cost Optimization (Training)**:
+- ✓ Preemptible VMs (70% cost reduction, with checkpoint/retry logic)
+- ✓ Scale to zero when no jobs running
+- ✓ Right-sized instances per model (small models use smaller instances)
+- ✓ Checkpoint cleanup (delete after 7 days)
+- ✓ Cached preprocessed features (reduce BigQuery costs)
+- ✓ Spot instances with aggressive bidding
+
+### Failure Isolation & Blast Radius
+
+Training failures are strictly isolated to prevent impact on data ingestion, inference, and other pipelines.
+
+**Training Failure Scope**:
+
+```yaml
+Isolation Guarantees:
+  Failed Training Job Impact:
+    affected:
+      - This training job only
+      - Model artifacts NOT updated (previous version remains)
+
+    NOT affected:
+      ✓ Data ingestion pipeline (continues normally)
+      ✓ Data processing pipeline (continues normally)
+      ✓ Streaming inference (uses existing models)
+      ✓ Real-time API (serves existing models)
+      ✓ Dashboard (shows existing models)
+      ✓ Other training jobs (parallel models continue)
+
+  Failed Worker Impact:
+    affected:
+      - This worker only
+      - Training job pauses/retries
+
+    NOT affected:
+      ✓ Other workers in same job
+      ✓ Other training jobs
+      ✓ Non-training pipelines
+
+  Orchestrator Failure Impact:
+    affected:
+      - Training DAG runs paused
+
+    NOT affected:
+      ✓ Completed training artifacts
+      ✓ Data pipeline (separate orchestrator)
+      ✓ Inference pipeline
+      ✓ Model registry
+
+Recovery:
+  - Orchestrator auto-restarts within 5 minutes
+  - Training jobs resume from last checkpoint
+```
+
+**Training Non-Blocking Design**:
+
+```
+System Architecture (Failure Isolation):
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  ┌──────────────┐         ┌──────────────┐         │
+│  │ Data         │    ✓    │ Inference    │         │
+│  │ Pipeline     │ Running │ API          │         │
+│  │ (Running)    │         │ (Running)    │         │
+│  └──────────────┘         └──────────────┘         │
+│                                                     │
+│  ┌──────────────┐                                  │
+│  │ Training     │         ╳ FAILED                 │
+│  │ Pipeline     │           (Isolated)             │
+│  │ (Failed)     │                                  │
+│  └──────────────┘                                  │
+│                                                     │
+│  Training Failure Impact:                          │
+│  ✓ Data ingestion: UNAFFECTED                     │
+│  ✓ Inference API: UNAFFECTED (uses old models)    │
+│  ✓ Dashboard: UNAFFECTED                          │
+│  ✓ Monitoring: UNAFFECTED                         │
+│  ✗ New models: NOT deployed (old models remain)   │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+**Retry Scope (Training-Specific)**:
+
+```yaml
+Training Retry Policy:
+  scope: task  # Per-model training task, NOT entire training DAG
+
+  max_retries: 2  # Lower than data pipeline (training more expensive)
+  retry_delay: 300s  # 5 minutes (allow resources to clean up)
+  backoff_multiplier: 2.0
+
+  retry_on:
+    - worker_preempted  # Preemptible VM preempted
+    - network_timeout   # Transient network issue
+    - worker_crash      # Worker node failure
+
+  no_retry_on:
+    - data_validation_failure  # Data quality issue
+    - out_of_memory            # Requires config change
+    - timeout_exceeded         # Job taking too long
+    - cost_limit_exceeded      # Budget issue
+
+  retry_behavior:
+    - Resume from last checkpoint (NOT from scratch)
+    - Increment attempt_number in logs
+    - Track retry reason in metadata
+    - Alert on 2nd retry (may indicate systemic issue)
+
+Retry Isolation:
+  - Retries do NOT affect other model training tasks
+  - Failed tire_degradation retries do NOT block fuel_consumption training
+  - Retry count tracked per model, NOT per DAG
+  - Max 2 retries → manual intervention required
+```
+
+**Cascading Failure Prevention (Training DAG)**:
+
+```yaml
+Training DAG Branch Independence:
+  # 4 parallel training tasks (tire_deg, fuel_cons, brake_bias, driving_style)
+  # Failure in one does NOT cascade to others
+
+  ┌──────────────┐
+  │  Validate    │
+  │Training Data │
+  └──────┬───────┘
+         │
+  ┌──────┼──────────────────┬──────────┬──────────┐
+  │      │                  │          │          │
+  ▼      ▼                  ▼          ▼          ▼
+┌────┐ ┌────┐            ┌────┐    ┌────┐    ┌────┐
+│Tire│ │Fuel│   (Failed)│Brake│    │Drive│    │...│
+│Deg │ │Cons│      ╳     │Bias│    │Style│    │   │
+└──┬─┘ └──┬─┘            └──┬─┘    └──┬─┘    └───┘
+   │      │                 │         │
+   │      ╳                 │         │
+   │                        │         │
+   └────────┬───────────────┴─────────┘
+            ▼
+     ┌──────────────┐
+     │  Evaluate    │  ← Only evaluates successful models
+     │  Models      │    (Fuel failure isolated)
+     └──────┬───────┘
+            ▼
+     ┌──────────────┐
+     │  Register    │  ← Only registers evaluated models
+     │  Models      │    (Partial success allowed)
+     └──────────────┘
+
+Independence Rules:
+  - Each model training task is independent
+  - Evaluation stage evaluates ONLY successful models
+  - Registration stage registers ONLY evaluated models
+  - Partial success allowed (3/4 models trained → deploy 3)
+  - Failed models keep previous version in production
+```
+
+**Blast Radius Containment (Training)**:
+
+```yaml
+Impact Boundaries:
+  Training Task Failure:
+    affected: 1 model training task
+    unaffected: other 3 model training tasks, data pipeline, inference
+    recovery: retry task (2x), fallback to previous model version
+
+  Training DAG Failure:
+    affected: all training tasks in this DAG run
+    unaffected: data pipeline, inference, other DAG runs
+    recovery: retry DAG from failed node, investigate root cause
+
+  Worker Pool Exhaustion:
+    affected: new training jobs (queued)
+    unaffected: running jobs, data pipeline, inference
+    recovery: autoscaling provisions workers (or jobs wait in queue)
+
+  Training Data Corruption:
+    affected: current training DAG (validation failure)
+    unaffected: previous models, inference, data pipeline
+    recovery: block training, fix data, re-run validation
+
+Prohibited Cascades:
+  ❌ Training failure NEVER stops data ingestion
+  ❌ Training failure NEVER stops inference API
+  ❌ Training failure NEVER deletes previous models
+  ❌ One model failure NEVER blocks other model training
+```
+
+### Compliance & Auditability
+
+All training executions are fully auditable with immutable records for reproducibility and compliance.
+
+**Training Audit Trail**:
+
+```yaml
+Immutable Training Records:
+  1. Training Job Metadata:
+     - DAG run ID and task ID
+     - Model type and version
+     - Git commit SHA (training code)
+     - Container image digest (training worker)
+     - Hyperparameters (all config)
+     - Data split versions (train/val checksums)
+     - Resource allocation (CPU, memory, workers)
+     - Start/end timestamps
+     - Success/failure status
+     - Cost per job
+
+  2. Training Artifacts:
+     - Model binary (versioned in GCS)
+     - Model metadata (architecture, hyperparameters)
+     - Training metrics (loss, accuracy per epoch)
+     - Validation metrics (test set performance)
+     - Feature importance (if applicable)
+     - Checkpoints (retained 7 days)
+
+  3. Data Lineage:
+     - Input: f1_strategy.train (snapshot version)
+     - Features: f1_features table (version)
+     - Output: gs://f1-strategy-models/[model_type]/[version]/
+     - Full provenance chain queryable
+
+  4. IAM Access (Training-Specific):
+     - BigQuery reads: which tables, when, by whom
+     - GCS writes: which buckets, what artifacts
+     - Vertex AI job submissions
+     - Model registry updates
+```
+
+**Training Audit Schema**:
+
+```sql
+-- BigQuery table: f1_strategy.training_audit_log
+CREATE TABLE f1_strategy.training_audit_log (
+  audit_id STRING NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  dag_run_id STRING NOT NULL,
+  task_id STRING NOT NULL,
+  model_type STRING NOT NULL,
+  event_type STRING NOT NULL,  -- training_start, training_end, checkpoint_saved, model_registered
+  status STRING,  -- running, success, failure
+  metadata JSON,
+
+  -- Training-specific fields
+  git_commit_sha STRING,
+  container_image_digest STRING,
+  hyperparameters JSON,
+  num_workers INT64,
+  worker_type STRING,
+
+  -- Data lineage
+  input_data_version STRING,
+  input_data_checksum STRING,
+  output_model_uri STRING,
+  output_model_checksum STRING,
+
+  -- Performance
+  training_duration_seconds FLOAT64,
+  final_loss FLOAT64,
+  final_accuracy FLOAT64,
+
+  -- Cost
+  cost_usd FLOAT64,
+  worker_hours FLOAT64
+)
+PARTITION BY DATE(timestamp)
+CLUSTER BY model_type, dag_run_id
+OPTIONS(
+  description="Immutable audit log for all training executions"
+);
+```
+
+**Training Audit Queries**:
+
+```sql
+-- Query: All training runs for a specific model in last 30 days
+SELECT
+  timestamp,
+  dag_run_id,
+  status,
+  training_duration_seconds,
+  final_loss,
+  final_accuracy,
+  cost_usd
+FROM f1_strategy.training_audit_log
+WHERE model_type = 'tire_degradation'
+  AND event_type = 'training_end'
+  AND DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+ORDER BY timestamp DESC;
+
+-- Query: Reproduce training run (get exact configuration)
+SELECT
+  git_commit_sha,
+  container_image_digest,
+  hyperparameters,
+  input_data_version,
+  input_data_checksum,
+  num_workers,
+  worker_type
+FROM f1_strategy.training_audit_log
+WHERE dag_run_id = 'f1_training_pipeline_20260214_020000'
+  AND task_id = 'train_tire_degradation'
+  AND event_type = 'training_start'
+LIMIT 1;
+
+-- Query: Training cost trends
+SELECT
+  DATE(timestamp) as date,
+  model_type,
+  COUNT(*) as num_runs,
+  AVG(training_duration_seconds) as avg_duration,
+  SUM(cost_usd) as total_cost
+FROM f1_strategy.training_audit_log
+WHERE event_type = 'training_end'
+  AND status = 'success'
+  AND DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+GROUP BY date, model_type
+ORDER BY date DESC, model_type;
+```
+
+**Training Reproducibility**:
+
+```yaml
+Reproducibility Guarantees:
+  deterministic_training:
+    - Fixed random seeds (per DAG run)
+    - Exact hyperparameters recorded
+    - Data split checksums verified
+    - Container image digest pinned
+    - Training code version (git commit SHA)
+
+  reproducible_artifacts:
+    - Model binary checksums recorded
+    - Training metrics reproducible (±1% tolerance for numerical precision)
+    - Feature importance vectors match
+    - Prediction outputs match on test set
+
+  rollback_capability:
+    - Restore any previous model version
+    - Re-run training with historical config
+    - Recreate exact training environment
+    - Max rollback window: 90 days (then archived)
+
+Reproduction Procedure:
+  # Reproduce training run from 2024-01-15
+  python pipeline/training/reproduce.py \
+    --dag-run-id f1_training_pipeline_20240115_020000 \
+    --task-id train_tire_degradation \
+    --verify-checksums \
+    --compare-metrics
+
+  # Verifies:
+  # ✓ Git commit SHA matches
+  # ✓ Container image digest matches
+  # ✓ Hyperparameters match
+  # ✓ Input data checksums match
+  # ✓ Output model checksum matches (bit-for-bit)
+  # ✓ Training metrics match (within tolerance)
+```
+
+**Training Compliance Retention**:
+
+```yaml
+Training Artifact Retention:
+  trained_models: 90 days (production), then archive 1 year
+  training_metrics: 1 year
+  checkpoints: 7 days (delete after)
+  training_audit_logs: 1 year (regulatory)
+  hyperparameters: 1 year
+  training_code: permanent (Git)
+  cost_data: 3 years (accounting)
+
+Access Controls:
+  training_audit_logs: read-only (NO deletion)
+  model_artifacts: versioned (previous versions preserved)
+  training_configs: immutable after job start
+
+Compliance Export:
+  - Monthly export of training audit logs to secure archive
+  - Encrypted with CMEK (customer-managed encryption keys)
+  - Retention: 3 years for model governance
+  - Access: ML team leads, compliance officers only
+```
+
+**Training Audit Alerting**:
+
+```yaml
+Security Alerts:
+  - name: unauthorized_model_access
+    condition: model_registry access denied
+    severity: critical
+    channels: [security_team]
+
+  - name: model_artifact_tampering
+    condition: model checksum mismatch after registration
+    severity: critical
+    channels: [security_team, ml_team]
+    action: Quarantine model, investigate
+
+  - name: training_data_unauthorized_access
+    condition: BigQuery access from non-training service account
+    severity: warning
+    channels: [security_team]
+
+Compliance Alerts:
+  - name: training_audit_gap
+    condition: no training audit events for >1 day during scheduled training
+    severity: warning
+    channels: [compliance_team]
+
+  - name: model_deployment_without_audit
+    condition: model deployed without training_audit_log entry
+    severity: critical
+    channels: [compliance_team, ml_team]
+    action: Block deployment, require audit trail
+```
+
+---
+
 ## Production Readiness Checklist
 
 ### Pre-Deployment

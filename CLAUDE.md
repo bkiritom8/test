@@ -107,6 +107,7 @@ Build a production-grade, real-time F1 race strategy system delivering lap-by-la
 - **Registry**: Vertex AI MLflow-compatible
 - **Libraries**: pandas, NumPy, scikit-learn, TensorFlow, Dataflow SDK
 - **Security**: IAM RBAC, encrypted inter-worker transport (HTTPS)
+- **Operational Guarantees**: Task-level failure isolation, per-task resource limits, cost controls with budget thresholds, full audit trail
 
 ### Serving
 - **API**: FastAPI (async, type hints)
@@ -116,10 +117,13 @@ Build a production-grade, real-time F1 race strategy system delivering lap-by-la
 
 ### Monitoring
 - **Logging**: Centralized pipeline logging (per DAG run, per task)
-- **Metrics**: Cloud Monitoring
-- **Alerting**: Custom Pub/Sub + Slack integration
+- **Metrics**: Cloud Monitoring (duration, success/failure, retry counts, queue delay)
+- **Alerting**: Custom Pub/Sub + Slack integration (repeated failures, SLA violations, orchestrator unavailability)
 - **Drift Detection**: Weekly automated validation
 - **Pipeline Observability**: DAG execution tracking, task-level logs, retry history
+- **Cost Controls**: Resource limits per task, max runtime per job, autoscaling bounds, budget thresholds
+- **Failure Isolation**: Single task/DAG run scope, no cascading failures across DAG branches
+- **Auditability**: Immutable records of DAG definitions, task execution metadata, IAM access logs
 
 ## Repository Structure
 

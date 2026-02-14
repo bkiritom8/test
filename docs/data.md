@@ -1407,6 +1407,618 @@ pipeline.validation.error_count:
   labels: [validation_rule]
 ```
 
+## Operational Guarantees
+
+### Observability
+
+All data pipeline stages emit comprehensive metrics, logs, and execution signals for full operational visibility.
+
+**Metrics Collection** (per DAG run and per task):
+
+```yaml
+Core Metrics:
+  task_duration_seconds:
+    type: gauge
+    labels: [dag_id, task_id, dag_run_id]
+    description: Task execution duration
+    aggregations: [p50, p95, p99, max]
+
+  task_success_count:
+    type: counter
+    labels: [dag_id, task_id]
+    description: Successful task completions
+
+  task_failure_count:
+    type: counter
+    labels: [dag_id, task_id, error_type]
+    description: Failed task executions
+
+  task_retry_count:
+    type: counter
+    labels: [dag_id, task_id, attempt_number]
+    description: Task retry attempts
+
+  task_queue_delay_seconds:
+    type: gauge
+    labels: [dag_id, task_id]
+    description: Time between task ready and task start
+    slo: <60s for p95
+
+  task_scheduling_delay_seconds:
+    type: gauge
+    labels: [dag_id, task_id]
+    description: Time between task submission and execution
+    slo: <120s for p95
+
+Data Pipeline Metrics:
+  data.records_processed:
+    type: counter
+    labels: [task_id, table_name]
+    description: Number of records processed
+
+  data.validation_errors:
+    type: counter
+    labels: [task_id, validation_rule]
+    description: Data validation errors detected
+
+  data.quality_score:
+    type: gauge
+    labels: [task_id, metric_name]
+    description: Data quality score (0-100)
+    threshold: >95
+```
+
+**Alerting Rules**:
+
+```yaml
+Critical Alerts:
+  - name: repeated_task_failures
+    condition: task_failure_count > 3 in 1 hour for same task_id
+    severity: critical
+    channels: [pagerduty, slack]
+    action: Block dependent tasks, notify on-call
+
+  - name: sla_violation
+    condition: task_duration_seconds > task_sla_threshold
+    severity: warning
+    channels: [slack]
+    sla_thresholds:
+      ingest_ergast: 3600s     # 1 hour
+      ingest_fastf1: 21600s    # 6 hours
+      validate_raw_data: 300s  # 5 minutes
+      process_clean: 7200s     # 2 hours
+
+  - name: orchestrator_unavailable
+    condition: no dag_executor heartbeat in 5 minutes
+    severity: critical
+    channels: [pagerduty]
+    action: Restart orchestrator container
+
+  - name: data_quality_degradation
+    condition: data.quality_score < 95
+    severity: warning
+    channels: [slack]
+    action: Flag for data team review
+
+Medium Alerts:
+  - name: high_retry_rate
+    condition: rate(task_retry_count[1h]) > 0.1
+    severity: warning
+    channels: [slack]
+
+  - name: queue_delay_high
+    condition: task_queue_delay_seconds.p95 > 60s
+    severity: warning
+    channels: [slack]
+    action: Check orchestrator capacity
+```
+
+**Observability Scope**:
+- ✓ Data ingestion (Ergast, FastF1)
+- ✓ Data processing and cleaning
+- ✓ Data validation stages
+- ✓ Feature engineering and aggregation
+- ✓ Distributed training (see docs/training-pipeline.md)
+
+### Cost Controls
+
+Cost controls are enforced across all compute-heavy pipeline stages to prevent budget overruns.
+
+**Resource Limits Per Task**:
+
+```yaml
+Task Resource Limits:
+  ingest_ergast:
+    cpu_limit: 2 cores
+    memory_limit: 8Gi
+    timeout: 3600s
+    max_cost_per_run: $0.50
+
+  ingest_fastf1:
+    cpu_limit: 4 cores
+    memory_limit: 16Gi
+    timeout: 21600s
+    max_cost_per_run: $2.00
+
+  process_clean:
+    cpu_limit: 8 cores
+    memory_limit: 32Gi
+    timeout: 7200s
+    max_cost_per_run: $1.50
+
+  feature_engineering:
+    cpu_limit: 8 cores
+    memory_limit: 32Gi
+    timeout: 3600s
+    max_cost_per_run: $1.00
+
+  # Training tasks: See docs/training-pipeline.md
+```
+
+**Max Runtime Per Job**:
+
+```yaml
+Job Timeouts:
+  data_pipeline_dag: 36000s  # 10 hours max
+  training_pipeline_dag: 57600s  # 16 hours max (see training-pipeline.md)
+
+  # Individual task timeouts enforced in DAG definitions
+  # Jobs automatically terminated if timeout exceeded
+```
+
+**Autoscaling Bounds**:
+
+```yaml
+Orchestrator Autoscaling:
+  min_replicas: 1  # Always one orchestrator running
+  max_replicas: 3  # Max 3 concurrent DAG runs
+
+Worker Pool Autoscaling:
+  data_workers:
+    min_replicas: 0  # Scale to zero when idle
+    max_replicas: 10
+    scale_up_trigger: tasks_queued > 5
+    scale_down_delay: 600s  # 10 min idle before scale-down
+
+  training_workers:
+    min_replicas: 0
+    max_replicas: 20  # Higher limit for distributed training
+    scale_up_trigger: training_jobs_queued > 0
+    scale_down_delay: 300s  # 5 min idle (training more time-sensitive)
+```
+
+**Budget Thresholds & Throttling**:
+
+```yaml
+Monthly Budget:
+  total: $250
+  allocation:
+    data_pipeline: $50
+    training_pipeline: $120
+    inference: $30
+    storage: $30
+    monitoring: $20
+
+Budget Actions:
+  $200 (80% spent):
+    action: warning_alert
+    channels: [slack]
+    message: "80% of monthly budget consumed"
+
+  $225 (90% spent):
+    action: throttle_non_critical
+    scope:
+      - Pause weekly retraining jobs
+      - Reduce worker pool max_replicas by 50%
+      - Alert data/ML teams
+
+  $250 (100% spent):
+    action: emergency_stop
+    scope:
+      - Block new training jobs
+      - Scale all worker pools to zero
+      - Only allow critical data ingestion
+      - Notify engineering leadership
+
+  $300 (120% spent):
+    action: hard_shutdown
+    scope:
+      - Terminate all running jobs
+      - Scale to zero
+      - Require manual approval to restart
+```
+
+**Cost Visibility**:
+
+```yaml
+Cost Metrics (per DAG run, per stage):
+  cost.dag_run_total:
+    type: gauge
+    labels: [dag_id, dag_run_id]
+    description: Total cost for DAG run
+    export: BigQuery billing table
+
+  cost.task_compute:
+    type: gauge
+    labels: [task_id, dag_run_id]
+    description: Compute cost per task
+
+  cost.task_storage:
+    type: gauge
+    labels: [task_id, dag_run_id]
+    description: Storage I/O cost per task
+
+  cost.cumulative_month:
+    type: counter
+    labels: [pipeline]
+    description: Cumulative spend for current month
+    reset: Monthly on 1st
+
+Cost Dashboard:
+  - Real-time cost tracking per pipeline
+  - Cost per DAG run (historical trends)
+  - Cost breakdown by task type
+  - Projected monthly spend
+  - Cost anomaly detection (>50% variance from baseline)
+```
+
+**Cost Optimization Strategies**:
+- Preemptible VMs for data processing (70% cost reduction)
+- Scale-to-zero for idle worker pools
+- Storage lifecycle policies (move to Nearline after 30 days)
+- Cached BigQuery query results (24hr cache)
+- Spot instances for training workloads
+
+### Failure Isolation & Blast Radius
+
+Failures are contained to the smallest possible scope to prevent cascading failures across the pipeline.
+
+**Failure Scope Isolation**:
+
+```yaml
+Isolation Levels:
+  1. Single Task (Smallest Scope):
+     - Task failure isolated to that task only
+     - Downstream tasks NOT started
+     - Parallel tasks continue execution
+     - DAG run continues with partial success
+
+  2. Single DAG Run:
+     - All tasks in failed DAG run stopped
+     - Other concurrent DAG runs unaffected
+     - Retry logic scoped to this DAG run only
+
+  3. Pipeline Type (Largest Allowed Scope):
+     - Failed data pipeline does NOT impact:
+       * Training pipeline
+       * Inference pipeline
+       * Dashboard queries
+     - Failed training job does NOT impact:
+       * Data ingestion
+       * Streaming inference
+       * Live dashboards
+
+Prohibited Scope:
+  ❌ System-Wide Failures:
+     - One pipeline failure NEVER blocks others
+     - Orchestrator failure auto-recovers (max 5min downtime)
+     - No shared state between pipelines
+```
+
+**Retry Policy (Per-Task Scope)**:
+
+```yaml
+Retry Configuration:
+  scope: task  # Retries apply to individual tasks, NOT entire pipeline
+
+  max_retries: 3
+  retry_delay: 60s
+  backoff_multiplier: 2.0
+  max_retry_delay: 600s
+
+  retry_on:
+    - network_timeout
+    - resource_unavailable
+    - transient_error
+    - worker_preempted
+
+  no_retry_on:
+    - data_validation_failure  # Data quality issue, not transient
+    - permission_denied         # IAM misconfiguration
+    - invalid_configuration     # Code/config bug
+    - out_of_memory            # Requires larger instance, not retry
+
+Retry Isolation:
+  - Retries do NOT reset dependent tasks
+  - Retry failures do NOT trigger parent task retry
+  - Retry count tracked per task, not per DAG
+  - Failed retries logged separately for analysis
+```
+
+**Non-Blocking Design**:
+
+```
+Pipeline Independence:
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  ┌──────────────┐         ┌──────────────┐         │
+│  │ Data         │    ╳    │ Training     │         │
+│  │ Pipeline     │ Isolated│ Pipeline     │         │
+│  │ (Running)    │         │ (Failed)     │         │
+│  └──────────────┘         └──────────────┘         │
+│         │                                           │
+│         ├─> Inference (Still Works)                │
+│         ├─> Dashboard (Still Works)                │
+│         └─> Monitoring (Still Works)               │
+│                                                     │
+│  Training Failure Impact: ZERO on other systems    │
+└─────────────────────────────────────────────────────┘
+```
+
+**Cascading Failure Prevention**:
+
+```yaml
+DAG Branch Isolation:
+  # Example: 3 parallel tasks (Train/Val/Test splits)
+  # Failure in one branch does NOT cascade to others
+
+  ┌──────────────┐
+  │  Feature     │
+  │ Engineering  │
+  └──────┬───────┘
+         │
+  ┌──────┼───────────────────┐
+  │      │                   │
+  ▼      ▼                   ▼
+┌────┐ ┌────┐             ┌────┐
+│Train│ │Val │  (Failed)  │Test│
+│Split│ │Split│     ╳      │Split│
+└────┘ └────┘             └────┘
+  │      │                   │
+  │      ╳                   │
+  │                          │
+  └──────────┬───────────────┘
+             ▼
+      ┌──────────────┐
+      │ Driver       │  ← Only waits for Train/Test
+      │ Profiles     │    (Val failure isolated)
+      └──────────────┘
+
+Prevention Rules:
+  - Tasks only wait for explicit dependencies
+  - No implicit cross-branch dependencies
+  - Failed branches marked as "skipped_due_to_failure"
+  - Downstream tasks check ALL required dependencies before starting
+  - Optional dependencies can fail without blocking
+```
+
+**Blast Radius Containment**:
+
+```yaml
+Impact Boundaries:
+  Task Failure:
+    affected: 1 task + direct children
+    unaffected: parallel tasks, unrelated DAG runs, other pipelines
+    recovery: retry task (3x), then manual intervention
+
+  DAG Run Failure:
+    affected: all tasks in this DAG run
+    unaffected: other DAG runs, other pipelines
+    recovery: retry DAG from failed node (partial re-run)
+
+  Orchestrator Failure:
+    affected: current DAG runs (paused)
+    unaffected: completed tasks, artifact storage, other services
+    recovery: auto-restart orchestrator, resume DAG runs
+
+  Worker Pool Exhaustion:
+    affected: new tasks (queued)
+    unaffected: running tasks, other pipelines
+    recovery: autoscaling provisions new workers
+
+  Data Corruption:
+    affected: downstream tasks using corrupt data
+    unaffected: parallel pipelines, historical data
+    recovery: rollback to last good snapshot, re-run from that point
+```
+
+### Compliance & Auditability
+
+All pipeline executions are fully auditable with immutable records for compliance and reproducibility.
+
+**Audit Trail Requirements**:
+
+```yaml
+Immutable Records:
+  1. DAG Definitions (Versioned):
+     - Git commit SHA for every DAG run
+     - DAG definition stored in Cloud Storage (immutable)
+     - Changes tracked via Git history
+     - Previous versions queryable
+
+  2. Task Execution Metadata:
+     - Task start/end timestamps
+     - Container image SHA256 digest
+     - Worker node hostname
+     - Resource allocation (CPU, memory)
+     - Input/output artifact URIs
+     - Exit code and status
+     - Retry history
+     - All metadata written to BigQuery (append-only)
+
+  3. IAM Access Logs:
+     - All data access logged to Cloud Audit Logs
+     - BigQuery queries logged (who, what, when)
+     - GCS reads/writes logged
+     - Service account usage tracked
+     - Retention: 1 year (compliance requirement)
+
+  4. Data Lineage:
+     - Input datasets → Task → Output artifacts
+     - Full provenance chain for every artifact
+     - Queryable via BigQuery metadata tables
+```
+
+**Audit Log Schema**:
+
+```sql
+-- BigQuery table: f1_strategy.pipeline_audit_log
+CREATE TABLE f1_strategy.pipeline_audit_log (
+  audit_id STRING NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  dag_id STRING NOT NULL,
+  dag_run_id STRING NOT NULL,
+  task_id STRING,
+  event_type STRING NOT NULL,  -- task_start, task_end, data_access, iam_auth, etc.
+  actor STRING,  -- Service account or user
+  resource STRING,  -- BigQuery table, GCS object, etc.
+  action STRING,  -- read, write, delete, query
+  status STRING,  -- success, failure, denied
+  metadata JSON,
+  git_commit_sha STRING,  -- DAG version
+  container_image_digest STRING  -- Task container version
+)
+PARTITION BY DATE(timestamp)
+CLUSTER BY dag_id, task_id
+OPTIONS(
+  description="Immutable audit log for all pipeline executions",
+  require_partition_filter=true
+);
+```
+
+**Audit Queries**:
+
+```sql
+-- Query: Who accessed what data in the last 30 days?
+SELECT
+  timestamp,
+  actor,
+  resource,
+  action,
+  status
+FROM f1_strategy.pipeline_audit_log
+WHERE event_type = 'data_access'
+  AND DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+ORDER BY timestamp DESC;
+
+-- Query: Full execution history for a DAG run
+SELECT
+  task_id,
+  event_type,
+  timestamp,
+  status,
+  metadata
+FROM f1_strategy.pipeline_audit_log
+WHERE dag_run_id = 'f1_data_pipeline_20260214_120000'
+ORDER BY timestamp ASC;
+
+-- Query: All failed IAM authentication attempts
+SELECT
+  timestamp,
+  actor,
+  resource,
+  metadata.error_message
+FROM f1_strategy.pipeline_audit_log
+WHERE event_type = 'iam_auth'
+  AND status = 'denied'
+  AND DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+ORDER BY timestamp DESC;
+```
+
+**Reproducibility Guarantees**:
+
+```yaml
+Reproducibility Requirements:
+  1. Deterministic Execution:
+     - DAG definition (git commit SHA)
+     - Container images (SHA256 digest)
+     - Input data version (BigQuery snapshot)
+     - Random seeds (fixed per DAG run)
+
+  2. Artifact Versioning:
+     - All outputs tagged with dag_run_id
+     - GCS versioning enabled
+     - Models versioned in registry
+     - Checkpoints retained for 7 days
+
+  3. Rollback Capability:
+     - Restore from any previous DAG version
+     - Re-run with historical data snapshots
+     - Recreate exact execution environment
+     - Max rollback window: 90 days
+
+Reproducibility Example:
+  # Re-run pipeline with exact configuration from 2024-01-15
+  python pipeline/orchestrator/replay.py \
+    --dag-run-id f1_data_pipeline_20240115_020000 \
+    --verify-checksums \
+    --output-path gs://f1-strategy-artifacts/replays/
+
+  # Verifies:
+  # ✓ Git commit SHA matches
+  # ✓ Container image digests match
+  # ✓ Input data checksums match
+  # ✓ Output artifacts match (bit-for-bit)
+```
+
+**Compliance Retention**:
+
+```yaml
+Data Retention Policies:
+  audit_logs: 1 year (regulatory requirement)
+  task_execution_metadata: 1 year
+  dag_definitions: permanent (Git history)
+  pipeline_logs: 90 days (operational)
+  artifact_checksums: 1 year
+  cost_data: 3 years (tax/accounting)
+
+Access Controls:
+  audit_logs: Read-only (NO deletion allowed)
+  execution_metadata: Append-only (immutable after write)
+  dag_definitions: Versioned (previous versions preserved)
+
+Export for Compliance:
+  - Weekly export of audit logs to secure archive (Cloud Storage Coldline)
+  - Encrypted with customer-managed encryption keys (CMEK)
+  - Retention: 7 years for regulatory compliance
+  - Access: Authorized compliance officers only
+```
+
+**Audit Alerting**:
+
+```yaml
+Security Alerts:
+  - name: unauthorized_data_access
+    condition: iam_auth.status = 'denied'
+    severity: critical
+    channels: [security_team, pagerduty]
+
+  - name: data_deletion_attempt
+    condition: action = 'delete' on production tables
+    severity: critical
+    channels: [security_team, pagerduty]
+    action: Block operation, investigate
+
+  - name: unusual_query_volume
+    condition: data_access events > 1000 in 1 hour
+    severity: warning
+    channels: [security_team]
+    action: Review for potential data exfiltration
+
+Compliance Alerts:
+  - name: audit_log_gap
+    condition: no audit events for >10 minutes during active hours
+    severity: critical
+    channels: [compliance_team]
+    action: Investigate logging system
+
+  - name: retention_policy_violation
+    condition: audit logs deleted before 1 year
+    severity: critical
+    channels: [compliance_team, legal]
+    action: Block deletion, investigate
+```
+
 ## Future Enhancements
 
 - **Real-Time Telemetry**: Integrate live race feeds (requires FIA partnership)
