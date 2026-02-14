@@ -64,11 +64,18 @@ Build a production-grade, real-time F1 race strategy system delivering lap-by-la
                     │                           │
                     ▼                           ▼
             ┌──────────────┐          ┌──────────────┐
-            │  ML Models   │          │  Monte Carlo │
-            │  (4 models)  │          │  Simulator   │
-            └──────────────┘          └──────────────┘
-                    │                           │
-                    └───────────┬───────────────┘
+            │  Training    │          │  Monte Carlo │
+            │  Pipeline    │          │  Simulator   │
+            │ (Distributed)│          └──────────────┘
+            └──────────────┘                   │
+                    │                          │
+                    ▼                          │
+            ┌──────────────┐                   │
+            │  ML Models   │                   │
+            │  (4 models)  │                   │
+            └──────────────┘                   │
+                    │                          │
+                    └───────────┬──────────────┘
                                 ▼
                         ┌──────────────┐
                         │   FastAPI    │
@@ -90,14 +97,15 @@ Build a production-grade, real-time F1 race strategy system delivering lap-by-la
 - **Streaming**: Apache Beam / Dataflow (10K msgs/sec)
 - **Feature Store**: BigQuery native integration
 - **Sources**: Ergast API (1950-2024), FastF1 (2018-2024, 10Hz telemetry)
+- **Artifact Storage**: GCS buckets (models, metrics, checkpoints)
 
 ### ML Stack
-- **Tire Degradation**: XGBoost
-- **Fuel Consumption**: TensorFlow/Keras LSTM
-- **Brake Bias**: scikit-learn Linear Regression
-- **Driving Style**: Decision Tree classifier
+- **Training Pipeline**: Distributed containerized jobs, autoscaling workers
+- **Orchestration**: Vertex AI Pipelines, Terraform-managed infrastructure
+- **Compute**: Autoscaling worker pools (CPU/GPU abstracted)
 - **Registry**: Vertex AI MLflow-compatible
 - **Libraries**: pandas, NumPy, scikit-learn, TensorFlow, Dataflow SDK
+- **Security**: IAM RBAC, encrypted inter-worker transport (HTTPS)
 
 ### Serving
 - **API**: FastAPI (async, type hints)
@@ -141,9 +149,13 @@ f1-strategy-optimizer/
 │   ├── race_simulator.py # 10K scenario engine
 │   └── optimizer.py      # Strategy selection logic
 │
-├── pipeline/             # Real-time streaming
+├── pipeline/             # Real-time streaming & training
 │   ├── dataflow_job.py   # Beam pipeline
-│   └── feature_extraction.py
+│   ├── feature_extraction.py
+│   └── training/         # Distributed training infrastructure
+│       ├── orchestrator.py    # Training job scheduler
+│       ├── worker.py          # Training worker container
+│       └── config.yaml        # Training pipeline config
 │
 ├── serving/              # API deployment
 │   └── api.py            # FastAPI endpoints
@@ -163,12 +175,20 @@ f1-strategy-optimizer/
 │   ├── test_pipeline.py
 │   └── test_api.py
 │
+├── infrastructure/       # Terraform & deployment
+│   ├── terraform/        # GCP infrastructure as code
+│   │   ├── training.tf   # Training compute resources
+│   │   ├── storage.tf    # BigQuery, GCS buckets
+│   │   └── iam.tf        # Service accounts, roles
+│   └── k8s/             # Kubernetes manifests (if needed)
+│
 └── docs/                 # Detailed documentation
     ├── data.md           # Data sources, splits, management
     ├── models.md         # ML architectures, training
     ├── architecture.md   # System design, deployment
     ├── metrics.md        # KPIs, targets, validation
     ├── monitoring.md     # Operational monitoring, alerting
+    ├── training-pipeline.md  # Distributed training infrastructure
     ├── roadmap.md        # Timeline, phases, milestones
     ├── progress.md       # Session log (append-only)
     └── (session_summary.md at repo root)
@@ -182,6 +202,8 @@ f1-strategy-optimizer/
 | BigQuery Setup | Not Started | Data Architect | Schema definition needed |
 | Driver Profiles | Not Started | Data Scientist | 200+ profiles target |
 | Feature Store | Not Started | Data Engineer | f1_features table |
+| Training Infrastructure | Not Started | MLOps Engineer | Terraform, Vertex AI Pipelines |
+| Training Pipeline | Not Started | ML Engineer | Distributed, containerized jobs |
 | ML Models (4) | Not Started | ML Engineer | Train all 4 in parallel |
 | Monte Carlo Sim | Not Started | ML Engineer | 10K scenarios |
 | FastAPI Server | Not Started | Backend Engineer | Deploy to Cloud Run |
@@ -261,8 +283,10 @@ f1-strategy-optimizer/
 ### Setup & Infrastructure
 - [ ] Run `setup.sh` to configure GCP project
 - [ ] Create BigQuery dataset `f1_strategy`
-- [ ] Set up service accounts and IAM roles
+- [ ] Set up service accounts and IAM roles (least-privilege)
 - [ ] Configure Cloud Run, Dataflow, Vertex AI access
+- [ ] Provision GCS buckets for training artifacts
+- [ ] Deploy Terraform infrastructure (training compute, storage)
 
 ### Data Ingestion
 - [ ] Download Ergast API data (1950-2024) → BigQuery raw tables
@@ -275,6 +299,7 @@ f1-strategy-optimizer/
 - [ ] Create docs/data.md
 - [ ] Create docs/models.md
 - [ ] Create docs/architecture.md
+- [ ] Create docs/training-pipeline.md
 - [ ] Create docs/metrics.md
 - [ ] Create docs/monitoring.md
 - [ ] Create docs/roadmap.md
@@ -326,6 +351,7 @@ f1-strategy-optimizer/
 - **Data Details**: docs/data.md
 - **Model Architectures**: docs/models.md
 - **System Design**: docs/architecture.md
+- **Training Pipeline**: docs/training-pipeline.md
 - **KPIs & Metrics**: docs/metrics.md
 - **Monitoring Setup**: docs/monitoring.md
 - **Timeline**: docs/roadmap.md

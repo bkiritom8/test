@@ -582,6 +582,348 @@ bq cp f1_strategy.processed_data f1_strategy.processed_data_$(date +%Y%m%d)
 - Historical weather data less precise than modern
 - Solution: Categorical binning (Dry/Wet/Mixed) for older races
 
+## Training Pipeline Data Flow
+
+### Overview
+
+ML training runs as an isolated pipeline stage with containerized, distributed execution. Training jobs are orchestrated as scheduled, retryable stages that read from validated storage and write artifacts to dedicated buckets.
+
+### Data Sources for Training
+
+**Input Storage** (READ-ONLY):
+```
+BigQuery Tables (Processed/Validated Data):
+├── f1_strategy.f1_features          # Primary feature store
+├── f1_strategy.driver_profiles      # Driver behavioral profiles
+├── f1_strategy.train                # Training split (1950-2022)
+├── f1_strategy.validation           # Validation split (2023 Q1-Q2)
+└── f1_strategy.test                 # Test split (2023 Q3-2024)
+```
+
+**Prohibited Sources**:
+- ❌ `raw_races`, `raw_results`, `raw_telemetry` (training never reads raw data)
+- ❌ `processed_data` (must use versioned train/val/test splits)
+- ❌ Any streaming Pub/Sub topics (training is batch-only)
+
+### Data Output Destinations
+
+**Artifact Storage** (WRITE-ONLY):
+```
+GCS Buckets:
+├── gs://f1-strategy-artifacts/
+│   ├── models/
+│   │   ├── tire_degradation/
+│   │   │   ├── v1.0/model.pkl
+│   │   │   ├── v1.0/metadata.json
+│   │   │   └── v1.0/metrics.json
+│   │   ├── fuel_consumption/
+│   │   ├── brake_bias/
+│   │   └── driving_style/
+│   │
+│   ├── checkpoints/
+│   │   └── [job_id]/epoch_*.ckpt
+│   │
+│   ├── metrics/
+│   │   └── [job_id]/
+│   │       ├── training_metrics.csv
+│   │       ├── validation_metrics.csv
+│   │       └── feature_importance.json
+│   │
+│   └── logs/
+│       └── [job_id]/
+│           ├── stdout.log
+│           └── stderr.log
+```
+
+**Prohibited Destinations**:
+- ❌ Training jobs NEVER write to BigQuery `raw_*` tables
+- ❌ Training jobs NEVER write to `processed_data` tables
+- ❌ Training jobs NEVER modify feature store directly
+
+### Training Job Architecture
+
+**Containerized Execution**:
+```yaml
+Training Job:
+  - Base Image: gcr.io/f1-strategy/training-worker:latest
+  - Entrypoint: python pipeline/training/worker.py
+  - Resources: Autoscaling worker pool (CPU/GPU abstracted)
+  - Networking: Secure internal VPC, no public internet access
+  - IAM: Training service account (read: BigQuery, write: GCS artifacts)
+```
+
+**Distributed Training**:
+- **Horizontal Scaling**: 1-N workers per training job
+- **Communication**: Workers communicate via HTTPS (encrypted transport)
+- **Coordination**: Parameter server or ring-allreduce (framework-dependent)
+- **Fault Tolerance**: Worker failure does not fail job (retry logic)
+
+### Orchestration
+
+**Scheduler**: Vertex AI Pipelines
+```python
+# Example pipeline definition (Kubeflow DSL)
+from kfp.v2 import dsl
+
+@dsl.pipeline(name='f1-training-pipeline')
+def training_pipeline(
+    data_split: str = 'train',
+    model_type: str = 'tire_degradation',
+    num_workers: int = 4
+):
+    # Stage 1: Data validation
+    validate_data = dsl.ContainerOp(
+        name='validate-data',
+        image='gcr.io/f1-strategy/data-validator:latest',
+        arguments=['--split', data_split]
+    )
+
+    # Stage 2: Distributed training
+    train_model = dsl.ContainerOp(
+        name='train-model',
+        image='gcr.io/f1-strategy/training-worker:latest',
+        arguments=[
+            '--model', model_type,
+            '--data-split', data_split,
+            '--num-workers', num_workers
+        ]
+    ).after(validate_data)
+
+    # Stage 3: Model evaluation
+    evaluate_model = dsl.ContainerOp(
+        name='evaluate-model',
+        image='gcr.io/f1-strategy/evaluator:latest',
+        arguments=['--model-uri', train_model.outputs['model_uri']]
+    ).after(train_model)
+```
+
+**Job Management**:
+- **Retries**: Up to 3 retries on failure (configurable)
+- **Timeout**: 12 hours max per training job
+- **Failure Detection**: Worker heartbeat monitoring (60s interval)
+- **Job Restart**: Failed workers automatically restarted
+- **Non-Blocking**: Training stages do not block streaming or inference pipelines
+
+**Scheduling**:
+```yaml
+Training Schedule:
+  - Weekly Retraining: Every Monday 02:00 UTC
+  - Post-Race Training: Triggered after race data validation (optional)
+  - Manual Trigger: Via Vertex AI Pipelines API
+  - Concurrent Jobs: Max 4 training jobs in parallel
+```
+
+### Infrastructure Provisioning
+
+**Terraform-Managed Resources**:
+```hcl
+# infrastructure/terraform/training.tf
+resource "google_compute_instance_template" "training_worker" {
+  name         = "f1-training-worker-template"
+  machine_type = var.worker_machine_type  # Abstracted (CPU/GPU)
+
+  disk {
+    source_image = "gcr.io/f1-strategy/training-worker:latest"
+  }
+
+  network_interface {
+    network = google_compute_network.training_vpc.name
+    # No external IP (internal-only)
+  }
+
+  service_account {
+    email  = google_service_account.training_worker.email
+    scopes = ["cloud-platform"]
+  }
+}
+
+resource "google_compute_autoscaler" "training_workers" {
+  name   = "f1-training-autoscaler"
+  target = google_compute_instance_group_manager.training_workers.id
+
+  autoscaling_policy {
+    min_replicas = 0
+    max_replicas = 10
+
+    cpu_utilization {
+      target = 0.7
+    }
+  }
+}
+```
+
+**Autoscaling**:
+- **Scale-to-Zero**: Worker pool scales to 0 when no jobs running
+- **Scale-Up**: Workers provisioned on-demand when job submitted
+- **Scale-Down**: Workers terminated after 10min idle timeout
+- **Resource Types**: CPU-optimized, GPU-accelerated, or memory-optimized (abstracted)
+
+### Security
+
+**IAM Roles** (Least-Privilege):
+```yaml
+Training Service Account: training-worker@f1-strategy.iam.gserviceaccount.com
+
+Permissions:
+  BigQuery:
+    - roles/bigquery.dataViewer  # READ f1_strategy.* tables
+    - roles/bigquery.jobUser     # Execute queries
+
+  Cloud Storage:
+    - roles/storage.objectCreator  # WRITE gs://f1-strategy-artifacts/*
+    - roles/storage.objectViewer   # READ training data exports (if needed)
+
+  Vertex AI:
+    - roles/aiplatform.user        # Submit training jobs
+
+  Denied:
+    - ❌ bigquery.dataEditor       # CANNOT modify BigQuery tables
+    - ❌ storage.admin             # CANNOT delete artifacts
+    - ❌ compute.admin             # CANNOT modify infrastructure
+```
+
+**Network Security**:
+- **VPC**: Training workers run in isolated VPC
+- **Firewall**: Ingress blocked, egress only to GCP APIs
+- **Encryption**: All inter-worker communication uses HTTPS/TLS 1.3
+- **No Public Access**: Workers have no external IP addresses
+
+**Data Access**:
+- **Read**: Training jobs read from BigQuery via IAM-authenticated connections
+- **Write**: Artifacts written to GCS with server-side encryption (AES-256)
+- **Audit Logging**: All data access logged to Cloud Audit Logs
+
+### Training Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────┐
+│ BigQuery (Processed & Validated Data)              │
+│ ├── f1_features (READ-ONLY)                        │
+│ ├── train split (READ-ONLY)                        │
+│ └── validation split (READ-ONLY)                   │
+└──────────────────┬──────────────────────────────────┘
+                   │
+                   │ Secure Query (IAM Auth)
+                   ▼
+┌─────────────────────────────────────────────────────┐
+│ Training Pipeline (Vertex AI Pipelines)            │
+│                                                     │
+│  ┌──────────────┐    ┌──────────────┐             │
+│  │  Worker 1    │◄──►│  Worker 2    │             │
+│  │ (Container)  │    │ (Container)  │             │
+│  └──────────────┘    └──────────────┘             │
+│         │                    │                     │
+│         │  HTTPS/TLS 1.3    │                     │
+│         ▼                    ▼                     │
+│  ┌──────────────┐    ┌──────────────┐             │
+│  │  Worker 3    │◄──►│  Worker N    │             │
+│  │ (Container)  │    │ (Container)  │             │
+│  └──────────────┘    └──────────────┘             │
+└──────────────────┬──────────────────────────────────┘
+                   │
+                   │ Write Artifacts (IAM Auth, Encrypted)
+                   ▼
+┌─────────────────────────────────────────────────────┐
+│ GCS Artifact Storage (WRITE-ONLY)                  │
+│ ├── models/ (trained model binaries)               │
+│ ├── checkpoints/ (intermediate states)             │
+│ ├── metrics/ (training/validation metrics)         │
+│ └── logs/ (execution logs)                         │
+└─────────────────────────────────────────────────────┘
+```
+
+### Data Validation Before Training
+
+**Pre-Training Checks** (Automated):
+```python
+# pipeline/training/validate.py
+def validate_training_data(split: str) -> bool:
+    """Validate data quality before training starts."""
+
+    # Check 1: Data completeness
+    query = f"""
+        SELECT COUNT(*) as total_rows,
+               COUNTIF(lap_time_ms IS NULL) as null_lap_times,
+               COUNTIF(tire_age IS NULL) as null_tire_age
+        FROM f1_strategy.{split}
+    """
+    result = bq_client.query(query).result()
+    row = list(result)[0]
+
+    completeness = 1 - (row.null_lap_times + row.null_tire_age) / (row.total_rows * 2)
+    assert completeness > 0.95, f"Data completeness {completeness:.2%} < 95%"
+
+    # Check 2: Temporal consistency
+    query = f"""
+        SELECT MIN(race_date) as min_date, MAX(race_date) as max_date
+        FROM f1_strategy.{split}
+    """
+    result = bq_client.query(query).result()
+    row = list(result)[0]
+
+    if split == 'train':
+        assert row.min_date >= '1950-01-01', "Train split starts too early"
+        assert row.max_date <= '2022-12-31', "Train split leaks into validation"
+
+    # Check 3: Feature schema match
+    expected_features = ['lap_time_ms', 'tire_age', 'fuel_remaining', ...]
+    query = f"SELECT * FROM f1_strategy.{split} LIMIT 1"
+    result = bq_client.query(query).result()
+    actual_features = [field.name for field in result.schema]
+
+    missing = set(expected_features) - set(actual_features)
+    assert not missing, f"Missing features: {missing}"
+
+    return True
+```
+
+**Validation Failure Handling**:
+- Training job exits with error code
+- Alert sent to Slack/PagerDuty
+- Logs written to Cloud Logging
+- No model artifacts written
+
+### Cost Management
+
+**Training Budget**:
+- **Weekly Training**: ~$20-30 (4 workers × 2 hours × $2.50/hr)
+- **Monthly Budget**: ~$80-120
+- **Cost Alert**: Trigger if single job exceeds $50
+
+**Cost Optimization**:
+- Use preemptible VMs for non-critical training
+- Cache preprocessed features to reduce BigQuery query costs
+- Autoscale to zero when idle
+- Use spot instances (up to 70% cost reduction)
+
+### Monitoring & Observability
+
+**Training Metrics** (Exported to Cloud Monitoring):
+```yaml
+Metrics:
+  - training.job.duration_seconds
+  - training.job.failure_count
+  - training.worker.cpu_utilization
+  - training.worker.memory_usage
+  - training.data.records_processed
+  - training.model.loss
+  - training.model.accuracy
+```
+
+**Alerts**:
+```yaml
+Training Alerts:
+  - Job Duration > 12 hours → PagerDuty
+  - Job Failure Rate > 20% → Slack
+  - Worker OOM → Auto-retry with larger instance
+  - Data Validation Failure → Block training, alert owner
+```
+
+**Logs**:
+- All training logs streamed to Cloud Logging
+- Queryable via Log Explorer
+- Retention: 30 days
+
 ## Future Enhancements
 
 - **Real-Time Telemetry**: Integrate live race feeds (requires FIA partnership)
@@ -589,11 +931,14 @@ bq cp f1_strategy.processed_data f1_strategy.processed_data_$(date +%Y%m%d)
 - **Tire Temperature**: More granular tire deg modeling with temp data
 - **Setup Database**: Expand vehicle setup specifications (currently limited)
 - **Multi-Series**: Extend to Formula E, IndyCar, WEC (similar data structure)
+- **Federated Learning**: Train on team-specific data without centralizing
+- **AutoML Integration**: Automated hyperparameter tuning via Vertex AI AutoML
 
 ---
 
 **See Also**:
 - CLAUDE.md: High-level project overview
+- docs/training-pipeline.md: Detailed training infrastructure specifications
 - docs/models.md: How data flows into ML models
-- docs/architecture.md: Data pipeline architecture
+- docs/architecture.md: System design, deployment
 - docs/metrics.md: Data quality KPIs
