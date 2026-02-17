@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 
   backend "gcs" {
@@ -47,7 +51,8 @@ resource "google_project_service" "required_apis" {
     "iam.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
-    "secretmanager.googleapis.com"
+    "secretmanager.googleapis.com",
+    "servicenetworking.googleapis.com"
   ])
 
   service            = each.value
@@ -106,12 +111,14 @@ module "cloud_run" {
   timeout_seconds = 60
 
   env_vars = {
-    ENV                = var.environment
-    CLOUD_SQL_INSTANCE = google_sql_database_instance.f1_db.connection_name
-    PUBSUB_PROJECT_ID  = var.project_id
-    ENABLE_HTTPS       = "true"
-    ENABLE_IAM         = "true"
-    LOG_LEVEL          = "INFO"
+    ENV               = var.environment
+    DB_HOST           = google_sql_database_instance.f1_db.private_ip_address
+    DB_NAME           = google_sql_database.f1_data.name
+    DB_PORT           = "5432"
+    PUBSUB_PROJECT_ID = var.project_id
+    ENABLE_HTTPS      = "true"
+    ENABLE_IAM        = "true"
+    LOG_LEVEL         = "INFO"
   }
 
   labels = local.common_labels
@@ -210,12 +217,37 @@ resource "google_storage_bucket" "models" {
   labels = local.common_labels
 }
 
+# Private IP range for Cloud SQL VPC peering
+resource "google_compute_global_address" "private_ip_range" {
+  name          = "f1-optimizer-private-ip-${var.environment}"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = module.networking.network_id
+
+  depends_on = [module.networking]
+}
+
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = module.networking.network_id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_range.name]
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Generate random password for Cloud SQL user
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+}
+
 # Cloud SQL (PostgreSQL) — operational data store replacing BigQuery
 resource "google_sql_database_instance" "f1_db" {
   name                = "f1-optimizer-${var.environment}"
   database_version    = "POSTGRES_15"
   region              = var.region
-  deletion_protection = false
+  deletion_protection = true
 
   settings {
     tier = "db-f1-micro"
@@ -225,14 +257,18 @@ resource "google_sql_database_instance" "f1_db" {
     }
 
     ip_configuration {
-      ipv4_enabled = true
-      ssl_mode     = "ENCRYPTED_ONLY"
+      ipv4_enabled    = false
+      private_network = module.networking.network_id
+      ssl_mode        = "ENCRYPTED_ONLY"
     }
+
+    user_labels = local.common_labels
   }
 
-  labels = local.common_labels
-
-  depends_on = [google_project_service.required_apis]
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_networking_connection.private_vpc_connection,
+  ]
 }
 
 resource "google_sql_database" "f1_data" {
@@ -245,7 +281,22 @@ resource "google_sql_user" "api_user" {
   name     = "f1_api"
   instance = google_sql_database_instance.f1_db.name
   project  = var.project_id
-  password = var.db_password
+  password = random_password.db_password.result
+}
+
+resource "google_secret_manager_secret" "db_password" {
+  secret_id = "f1-db-password-${var.environment}"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+resource "google_secret_manager_secret_version" "db_password" {
+  secret      = google_secret_manager_secret.db_password.id
+  secret_data = random_password.db_password.result
 }
 
 resource "google_project_iam_member" "api_cloudsql_client" {
@@ -287,9 +338,9 @@ resource "google_monitoring_alert_policy" "api_error_rate" {
 }
 
 # Outputs
-output "cloud_sql_instance_name" {
-  description = "Cloud SQL instance name"
-  value       = google_sql_database_instance.f1_db.name
+output "cloud_sql_instance_connection_name" {
+  description = "Cloud SQL instance connection name"
+  value       = google_sql_database_instance.f1_db.connection_name
 }
 
 output "api_service_url" {

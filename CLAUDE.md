@@ -1,8 +1,8 @@
 # F1 Complete Race Strategy Optimizer - Project Memory
 
-**Status**: Initial setup phase
+**Status**: Terraform infrastructure complete — ready for `terraform apply`
 **Branch**: `claude/f1-strategy-optimizer-lh9No`
-**Last Updated**: 2026-02-14
+**Last Updated**: 2026-02-17
 
 ## Project Summary
 
@@ -68,7 +68,7 @@ Data Sources (Ergast, FastF1) → BigQuery → Feature Store
 
 ## Tech Stack Summary
 
-- **Data**: BigQuery (warehouse), Dataflow (streaming), Ergast + FastF1 (sources)
+- **Data**: Cloud SQL PostgreSQL 15 (operational store), Dataflow (streaming), Ergast + FastF1 (sources)
 - **ML**: Distributed containerized training, DAG orchestration, Vertex AI registry
 - **Serving**: FastAPI on Cloud Run (serverless)
 - **Monitoring**: Centralized logging, Cloud Monitoring, alerting, drift detection
@@ -82,7 +82,7 @@ Data Sources (Ergast, FastF1) → BigQuery → Feature Store
 - **Uptime**: 99.5% during race weekends
 
 ### Cost
-- **Budget**: $200-250/month total ($120 training, $50 data, $30 inference, $30 storage, $20 monitoring)
+- **Budget**: $70/month hard cap (set in dev.tfvars and prod.tfvars)
 - **Target**: <$0.001 per prediction
 
 ### Data
@@ -144,19 +144,66 @@ Data Sources (Ergast, FastF1) → BigQuery → Feature Store
 
 | Phase | Components | Status |
 |-------|-----------|--------|
-| **Setup** | GCP config, BigQuery, IAM, Terraform | Not Started |
-| **Data** | Ingestion (Ergast, FastF1), DAG orchestrator, pipeline logging | Not Started |
+| **Setup** | GCP config, Cloud SQL, IAM, Terraform | Complete — ready for `apply` |
+| **Data** | Ingestion (Ergast, FastF1), DAG orchestrator, pipeline logging | DAG fetches data; **write to Cloud SQL missing** |
 | **Processing** | Cleaning, feature engineering, driver profiles | Not Started |
 | **Training** | 4 ML models (parallel), distributed training infrastructure | Not Started |
 | **Serving** | FastAPI, Cloud Run, Monte Carlo sim | Not Started |
 | **Ops** | Monitoring, dashboards, alerting | Not Started |
 
+## Terraform Infrastructure (as of 2026-02-17)
+
+### What was done
+- **Replaced BigQuery entirely with Cloud SQL (PostgreSQL 15)**
+  - Removed `module "bigquery"` and `bigquery.googleapis.com` API
+  - Added `google_sql_database_instance` (private IP on VPC, deletion_protection=true, automated backups)
+  - Added `google_sql_database` (`f1_data`) and `google_sql_user` (`f1_api`)
+  - Password auto-generated via `random_password`, stored in Secret Manager (`google_secret_manager_secret` + `google_secret_manager_secret_version`)
+  - `api_sa` IAM binding: `bigquery.dataViewer` → `roles/cloudsql.client`
+  - Cloud Run env vars: `BIGQUERY_DATASET` → `DB_HOST`, `DB_NAME`, `DB_PORT`
+  - Output: `bigquery_dataset_id` → `cloud_sql_instance_connection_name`
+- **Added VPC private IP peering for Cloud SQL**
+  - `google_compute_global_address` (VPC_PEERING, /16)
+  - `google_service_networking_connection`
+  - `servicenetworking.googleapis.com` added to required APIs
+  - `networking` module: added `output "network_id"`
+- **Added `hashicorp/random ~> 3.0` provider**
+- **Removed `var.db_password`** — password is Terraform-generated
+- **Fixed `user_labels`** inside `settings {}` (Cloud SQL provider 5.x requirement)
+- **Created `dev.tfvars` and `prod.tfvars`** (project: f1optimizer, region: us-central1, budget: $70)
+- **Updated README** with GCS state bucket creation commands
+
+### Key files
+- `terraform/main.tf` — all infrastructure
+- `terraform/variables.tf` — no db_password, no bigquery_location
+- `terraform/dev.tfvars` — dev environment (min_instances=0, max=3)
+- `terraform/prod.tfvars` — prod environment (min_instances=1, max=10)
+- `terraform/modules/networking/main.tf` — exposes `network_id` output
+
+### To deploy
+```bash
+# One-time: create state bucket
+gsutil mb -p f1optimizer gs://f1-optimizer-terraform-state
+gsutil versioning set on gs://f1-optimizer-terraform-state
+
+gcloud auth application-default login
+terraform -chdir=terraform init
+terraform -chdir=terraform apply -var-file=dev.tfvars
+```
+
+## Known Gaps (next priorities)
+
+1. **DAG missing write step**: `f1_data_ingestion.py` fetches from Ergast/FastF1 but never writes to Cloud SQL — Cloud SQL will be empty after `terraform apply` until this is implemented
+2. **Architecture diagram**: still references BigQuery — needs updating
+3. **docker-compose**: `mock-bigquery` service and `BIGQUERY_HOST` env var still reference BigQuery — needs Cloud SQL equivalent for local dev
+
 ## Next Steps
 
-1. **Week 1-2**: GCP setup, data ingestion, BigQuery schema
-2. **Week 3-4**: Driver profile extraction, feature engineering
-3. **Week 5-7**: Model training (4 models in parallel), validation
-4. **Week 8+**: API deployment, Monte Carlo sim, dashboard
+1. **Immediate**: `terraform apply -var-file=dev.tfvars` to provision GCP infra
+2. **Next**: Add Cloud SQL write step to `f1_data_ingestion.py` DAG
+3. **Week 3-4**: Driver profile extraction, feature engineering
+4. **Week 5-7**: Model training (4 models in parallel), validation
+5. **Week 8+**: API deployment, Monte Carlo sim, dashboard
 
 See docs/ for detailed implementation plans.
 

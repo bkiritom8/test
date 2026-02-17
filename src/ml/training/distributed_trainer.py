@@ -176,7 +176,10 @@ class DistributedTrainer:
         return metrics
 
     def save_model(
-        self, model, model_dir: str = "/app/models", metadata: Optional[Dict[str, Any]] = None
+        self,
+        model,
+        model_dir: str = "/app/models",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Save trained model with metadata"""
         import joblib

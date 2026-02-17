@@ -64,13 +64,18 @@ pytest tests/ -v
 ```bash
 # 1. Authenticate with GCP
 gcloud auth login
+gcloud auth application-default login
 gcloud config set project <your-project-id>
 
-# 2. Initialize Terraform
+# 2. Create Terraform state bucket (once, before terraform init)
+gsutil mb -p f1optimizer gs://f1-optimizer-terraform-state
+gsutil versioning set on gs://f1-optimizer-terraform-state
+
+# 3. Initialize Terraform
 cd terraform
 terraform init
-terraform plan
-terraform apply
+terraform plan -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
 
 # 3. Deploy DAGs
 ./scripts/deploy_dags.sh

@@ -16,3 +16,8 @@ resource "google_compute_subnetwork" "primary" {
   network       = google_compute_network.vpc.id
   ip_cidr_range = "10.0.0.0/20"
 }
+
+output "network_id" {
+  description = "VPC network ID (self_link)"
+  value       = google_compute_network.vpc.id
+}

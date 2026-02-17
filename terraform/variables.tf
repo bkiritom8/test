@@ -52,9 +52,3 @@ variable "budget_amount" {
   type        = number
   default     = 200
 }
-
-variable "db_password" {
-  description = "Cloud SQL API user password"
-  type        = string
-  sensitive   = true
-}
