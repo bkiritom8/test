@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 USER airflow
 
 # Install Python dependencies
-COPY requirements-airflow.txt /tmp/
+COPY docker/requirements-airflow.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt
 
 # Install additional Apache Beam dependencies
