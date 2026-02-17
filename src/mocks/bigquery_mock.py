@@ -3,54 +3,52 @@ Mock BigQuery service for local development and testing.
 Provides a SQLite-backed implementation of BigQuery API.
 """
 
-import json
 import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from prometheus_client import Counter, Histogram, generate_latest
 from prometheus_client import CONTENT_TYPE_LATEST
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Prometheus metrics
 QUERY_COUNTER = Counter(
-    'bigquery_mock_queries_total',
-    'Total number of queries executed',
-    ['dataset', 'table', 'status']
+    "bigquery_mock_queries_total",
+    "Total number of queries executed",
+    ["dataset", "table", "status"],
 )
 QUERY_DURATION = Histogram(
-    'bigquery_mock_query_duration_seconds',
-    'Query execution duration',
-    ['dataset', 'table']
+    "bigquery_mock_query_duration_seconds",
+    "Query execution duration",
+    ["dataset", "table"],
 )
 ROWS_PROCESSED = Counter(
-    'bigquery_mock_rows_processed_total',
-    'Total number of rows processed',
-    ['dataset', 'table', 'operation']
+    "bigquery_mock_rows_processed_total",
+    "Total number of rows processed",
+    ["dataset", "table", "operation"],
 )
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Mock BigQuery Service",
     description="Local BigQuery emulator for F1 Strategy Optimizer",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 
 class QueryRequest(BaseModel):
     """BigQuery query request model"""
+
     query: str
     use_legacy_sql: bool = False
     max_results: Optional[int] = None
@@ -60,6 +58,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     """BigQuery query response model"""
+
     job_id: str
     rows: List[Dict[str, Any]]
     total_rows: int
@@ -70,11 +69,13 @@ class QueryResponse(BaseModel):
 
 class TableSchema(BaseModel):
     """BigQuery table schema model"""
+
     fields: List[Dict[str, Any]]
 
 
 class InsertRequest(BaseModel):
     """BigQuery table insert request"""
+
     rows: List[Dict[str, Any]]
     skip_invalid_rows: bool = False
     ignore_unknown_values: bool = False
@@ -192,7 +193,9 @@ class MockBigQueryService:
         self.conn.commit()
         logger.info("Database tables created successfully")
 
-    def execute_query(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
+    def execute_query(
+        self, query: str, params: Optional[Dict] = None
+    ) -> List[Dict[str, Any]]:
         """Execute SQL query and return results"""
         try:
             cursor = self.conn.cursor()
@@ -203,7 +206,9 @@ class MockBigQueryService:
                 cursor.execute(query)
 
             # Get column names
-            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            columns = (
+                [desc[0] for desc in cursor.description] if cursor.description else []
+            )
 
             # Fetch all rows
             rows = cursor.fetchall()
@@ -214,9 +219,7 @@ class MockBigQueryService:
                 result.append(dict(zip(columns, row)))
 
             ROWS_PROCESSED.labels(
-                dataset='f1_data',
-                table='query',
-                operation='select'
+                dataset="f1_data", table="query", operation="select"
             ).inc(len(result))
 
             return result
@@ -236,10 +239,12 @@ class MockBigQueryService:
                 try:
                     # Build INSERT statement
                     columns = list(row.keys())
-                    placeholders = ','.join(['?' for _ in columns])
-                    column_names = ','.join(columns)
+                    placeholders = ",".join(["?" for _ in columns])
+                    column_names = ",".join(columns)
 
-                    query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
+                    query = (
+                        f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
+                    )
                     cursor.execute(query, list(row.values()))
                     inserted += 1
 
@@ -250,15 +255,10 @@ class MockBigQueryService:
             self.conn.commit()
 
             ROWS_PROCESSED.labels(
-                dataset='f1_data',
-                table=table.split('.')[-1],
-                operation='insert'
+                dataset="f1_data", table=table.split(".")[-1], operation="insert"
             ).inc(inserted)
 
-            return {
-                "inserted": inserted,
-                "errors": errors if errors else None
-            }
+            return {"inserted": inserted, "errors": errors if errors else None}
 
         except Exception as e:
             logger.error(f"Bulk insert error: {e}")
@@ -273,12 +273,14 @@ class MockBigQueryService:
 
             schema = []
             for col in columns:
-                schema.append({
-                    "name": col[1],
-                    "type": col[2],
-                    "nullable": "YES" if not col[3] else "NO",
-                    "default": col[4]
-                })
+                schema.append(
+                    {
+                        "name": col[1],
+                        "type": col[2],
+                        "nullable": "YES" if not col[3] else "NO",
+                        "default": col[4],
+                    }
+                )
 
             return schema
 
@@ -297,7 +299,7 @@ class MockBigQueryService:
                 "name": "Bahrain Grand Prix",
                 "date": "2024-03-02",
                 "time": "15:00:00",
-                "url": "http://en.wikipedia.org/wiki/2024_Bahrain_Grand_Prix"
+                "url": "http://en.wikipedia.org/wiki/2024_Bahrain_Grand_Prix",
             }
         ]
 
@@ -310,7 +312,7 @@ class MockBigQueryService:
                 "surname": "Verstappen",
                 "dob": "1997-09-30",
                 "nationality": "Dutch",
-                "url": "http://en.wikipedia.org/wiki/Max_Verstappen"
+                "url": "http://en.wikipedia.org/wiki/Max_Verstappen",
             },
             {
                 "driver_id": "lewis_hamilton",
@@ -320,8 +322,8 @@ class MockBigQueryService:
                 "surname": "Hamilton",
                 "dob": "1985-01-07",
                 "nationality": "British",
-                "url": "http://en.wikipedia.org/wiki/Lewis_Hamilton"
-            }
+                "url": "http://en.wikipedia.org/wiki/Lewis_Hamilton",
+            },
         ]
 
         self.insert_rows("f1_data.races", sample_races)
@@ -350,48 +352,35 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "mock-bigquery",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
 @app.post("/query", response_model=QueryResponse)
 async def execute_query(request: QueryRequest):
     """Execute BigQuery SQL query"""
-    start_time = datetime.utcnow()
-
     try:
-        with QUERY_DURATION.labels(dataset='f1_data', table='query').time():
+        with QUERY_DURATION.labels(dataset="f1_data", table="query").time():
             results = mock_service.execute_query(request.query)
 
-        QUERY_COUNTER.labels(
-            dataset='f1_data',
-            table='query',
-            status='success'
-        ).inc()
+        QUERY_COUNTER.labels(dataset="f1_data", table="query", status="success").inc()
 
         # Generate schema from first row
         schema = []
         if results:
             for key, value in results[0].items():
-                schema.append({
-                    "name": key,
-                    "type": type(value).__name__
-                })
+                schema.append({"name": key, "type": type(value).__name__})
 
         return QueryResponse(
             job_id=f"job_{datetime.utcnow().timestamp()}",
             rows=results,
             total_rows=len(results),
             schema=schema,
-            query_complete=True
+            query_complete=True,
         )
 
     except Exception as e:
-        QUERY_COUNTER.labels(
-            dataset='f1_data',
-            table='query',
-            status='error'
-        ).inc()
+        QUERY_COUNTER.labels(dataset="f1_data", table="query", status="error").inc()
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -404,7 +393,7 @@ async def insert_rows(dataset: str, table: str, request: InsertRequest):
 
         return {
             "kind": "bigquery#tableDataInsertAllResponse",
-            "insertErrors": result.get("errors")
+            "insertErrors": result.get("errors"),
         }
 
     except Exception as e:
@@ -418,10 +407,7 @@ async def get_schema(dataset: str, table: str):
         full_table = f"{dataset}.{table}"
         schema = mock_service.get_table_schema(full_table)
 
-        return {
-            "kind": "bigquery#table",
-            "schema": {"fields": schema}
-        }
+        return {"kind": "bigquery#table", "schema": {"fields": schema}}
 
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -431,21 +417,17 @@ async def get_schema(dataset: str, table: str):
 async def metrics():
     """Prometheus metrics endpoint"""
     return JSONResponse(
-        content=generate_latest().decode('utf-8'),
-        media_type=CONTENT_TYPE_LATEST
+        content=generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST
     )
 
 
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {
-        "service": "Mock BigQuery",
-        "version": "1.0.0",
-        "status": "running"
-    }
+    return {"service": "Mock BigQuery", "version": "1.0.0", "status": "running"}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=9050)
