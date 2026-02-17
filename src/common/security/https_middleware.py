@@ -4,7 +4,7 @@ Includes TLS validation, security headers, and request validation.
 """
 
 import logging
-from typing import Callable
+from typing import Callable, Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -130,13 +130,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.request_counts = {}  # IP -> (count, window_start)
+        self.request_counts: Dict[str, Tuple[int, float]] = {}  # IP -> (count, window_start)
 
     async def dispatch(self, request: Request, call_next: Callable):
         import time
 
         # Get client IP
-        client_ip = request.client.host
+        client_ip = request.client.host if request.client else "unknown"
 
         # Skip rate limiting for health checks
         if request.url.path in ["/health", "/metrics"]:
@@ -203,7 +203,7 @@ class CORSMiddleware(BaseHTTPMiddleware):
 
         # Add CORS headers
         origin = request.headers.get("origin")
-        if origin in self.allow_origins or "*" in self.allow_origins:
+        if origin and (origin in self.allow_origins or "*" in self.allow_origins):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = str(
                 self.allow_credentials

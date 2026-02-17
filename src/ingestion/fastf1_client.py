@@ -223,7 +223,7 @@ class FastF1Client:
         year: int,
         event: int | str,
         session_type: str = "R",
-        driver: str = None,
+        driver: Optional[str] = None,
         lap_number: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get high-frequency telemetry data (10Hz)"""
@@ -257,7 +257,7 @@ class FastF1Client:
         year: int,
         event: int | str,
         session_type: str = "R",
-        driver: str = None,
+        driver: Optional[str] = None,
         lap_number: Optional[int] = None,
     ) -> pd.DataFrame:
         """Get car data (speed, throttle, brake, gear, RPM, DRS)"""

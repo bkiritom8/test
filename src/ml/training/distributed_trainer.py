@@ -6,7 +6,7 @@ Skeleton implementation for F1 Strategy Optimizer models.
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import numpy as np
@@ -99,7 +99,7 @@ class DistributedTrainer:
         self,
         model_class,
         train_data: Dict[str, Any],
-        hyperparameters: Dict[str, Any] = None,
+        hyperparameters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Train model with Ray distributed training"""
         logger.info(f"Starting distributed training for {self.model_name}")
@@ -176,7 +176,7 @@ class DistributedTrainer:
         return metrics
 
     def save_model(
-        self, model, model_dir: str = "/app/models", metadata: Dict[str, Any] = None
+        self, model, model_dir: str = "/app/models", metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Save trained model with metadata"""
         import joblib

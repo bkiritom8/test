@@ -109,7 +109,7 @@ class DataValidator:
         self,
         df: pd.DataFrame,
         schema_class: type[BaseModel],
-        required_columns: List[str] = None,
+        required_columns: Optional[List[str]] = None,
     ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
         Validate DataFrame against Pydantic schema
@@ -168,7 +168,7 @@ class DataValidator:
         return valid_df, validation_report
 
     def check_data_quality(
-        self, df: pd.DataFrame, column_rules: Dict[str, Dict[str, Any]] = None
+        self, df: pd.DataFrame, column_rules: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Tuple[DataQualityLevel, Dict[str, Any]]:
         """
         Assess data quality based on various metrics
@@ -182,7 +182,7 @@ class DataValidator:
         """
         logger.info(f"Assessing data quality for {len(df)} records")
 
-        quality_metrics = {
+        quality_metrics: Dict[str, Dict[str, Any]] = {
             "completeness": {},
             "validity": {},
             "consistency": {},
@@ -307,7 +307,7 @@ class DataValidator:
 
 if __name__ == "__main__":
     # Example usage
-    validator = DataValidator()
+    data_validator = DataValidator()
 
     # Sample race data
     race_data = pd.DataFrame(
@@ -326,12 +326,12 @@ if __name__ == "__main__":
     )
 
     # Validate
-    valid_df, report = validator.validate_dataframe(race_data, RaceDataSchema)
+    valid_df, report = data_validator.validate_dataframe(race_data, RaceDataSchema)
 
     print(f"Validation report: {report}")
 
     # Check quality
-    quality_level, quality_report = validator.check_data_quality(race_data)
+    quality_level, quality_report = data_validator.check_data_quality(race_data)
 
     print(f"Quality level: {quality_level.value}")
     print(f"Quality score: {quality_report['overall_score']}")

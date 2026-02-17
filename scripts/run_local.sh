@@ -97,7 +97,7 @@ warn "mypy runs with continue-on-error (matching CI)"
 # ─── 3. Security ─────────────────────────────────────────────────────────────
 if [[ "$SKIP_SECURITY" == "false" ]]; then
   step "Security — Bandit"
-  bandit -r src/ -f text 2>&1 || true
+  bandit -r src/ -f txt 2>&1 || true
   record "bandit" ok
   warn "bandit runs with continue-on-error (matching CI)"
 

@@ -11,3 +11,8 @@ resource "google_pubsub_topic" "topics" {
 
   labels = var.labels
 }
+
+output "topic_names" {
+  description = "Pub/Sub topic names"
+  value       = { for k, v in google_pubsub_topic.topics : k => v.name }
+}
