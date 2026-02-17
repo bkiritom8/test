@@ -23,8 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements-f1.txt
-          pip install ruff black mypy
+          pip install -r requirements-test.txt
 
       - name: Run Ruff
         run: ruff check src/ tests/
@@ -85,7 +84,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements-f1.txt
+          pip install -r requirements-test.txt
 
       - name: Run unit tests
         run: |
@@ -136,7 +135,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements-f1.txt
+          pip install -r requirements-test.txt
 
       - name: Run integration tests
         run: |
