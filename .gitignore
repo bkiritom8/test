@@ -191,6 +191,14 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfplan
+crash.log
+
 # PyPI configuration file
 .pypirc
 

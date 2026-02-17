@@ -180,7 +180,9 @@ class IAMSimulator:
         if not self._verify_password(password, user_data["hashed_password"]):
             return None
 
-        return User(**{k: v for k, v in user_data.items() if k != "hashed_password"})
+        return User.model_validate(
+            {k: v for k, v in user_data.items() if k != "hashed_password"}
+        )
 
     def create_access_token(
         self, data: Dict, expires_delta: Optional[timedelta] = None
@@ -271,7 +273,9 @@ class IAMSimulator:
 
         logger.info(f"User {username} created with roles: {[r.value for r in roles]}")
 
-        return User(**{k: v for k, v in user_data.items() if k != "hashed_password"})
+        return User.model_validate(
+            {k: v for k, v in user_data.items() if k != "hashed_password"}
+        )
 
     def grant_role(self, username: str, role: Role) -> bool:
         """Grant role to user"""

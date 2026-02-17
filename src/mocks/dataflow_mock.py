@@ -7,7 +7,7 @@ import logging
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -132,7 +132,7 @@ class MockDataflowService:
         logger.info(f"Created job {job_id}: {name}")
         return job
 
-    def run_job(self, job_id: str, pipeline_func: callable) -> DataflowJob:
+    def run_job(self, job_id: str, pipeline_func: Callable[[], Any]) -> DataflowJob:
         """Execute a Dataflow job"""
         if job_id not in self.jobs:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -147,7 +147,7 @@ class MockDataflowService:
                 result = pipeline_func()
 
                 # Update metrics
-                if isinstance(result, dict):
+                if isinstance(result, dict) and job.metrics is not None:
                     job.metrics.elements_read = result.get("elements_read", 0)
                     job.metrics.elements_written = result.get("elements_written", 0)
 

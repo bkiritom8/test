@@ -13,12 +13,6 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "bigquery_location" {
-  description = "BigQuery dataset location"
-  type        = string
-  default     = "US"
-}
-
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
@@ -57,4 +51,10 @@ variable "budget_amount" {
   description = "Monthly budget amount in USD"
   type        = number
   default     = 200
+}
+
+variable "db_password" {
+  description = "Cloud SQL API user password"
+  type        = string
+  sensitive   = true
 }
