@@ -106,7 +106,7 @@ class TestIAMSimulator:
 
         assert Permission.DATA_READ in permissions
         assert Permission.DATA_WRITE in permissions
-        assert Permission.BIGQUERY_QUERY in permissions
+        assert Permission.CLOUDSQL_QUERY in permissions
         assert Permission.ML_MODEL_DEPLOY not in permissions  # Should not have this
 
     def test_check_permission_granted(self, iam):
@@ -118,7 +118,7 @@ class TestIAMSimulator:
             roles=[Role.DATA_ENGINEER],
         )
 
-        has_permission = iam.check_permission(user, Permission.BIGQUERY_QUERY)
+        has_permission = iam.check_permission(user, Permission.CLOUDSQL_QUERY)
 
         assert has_permission is True
 
@@ -199,7 +199,7 @@ class TestIAMSimulator:
         permissions = iam.get_user_permissions(user)
 
         # Should have permissions from both roles
-        assert Permission.BIGQUERY_QUERY in permissions
+        assert Permission.CLOUDSQL_QUERY in permissions
         assert Permission.ML_MODEL_WRITE in permissions
 
 

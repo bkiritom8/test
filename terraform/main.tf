@@ -52,7 +52,8 @@ resource "google_project_service" "required_apis" {
     "logging.googleapis.com",
     "monitoring.googleapis.com",
     "secretmanager.googleapis.com",
-    "servicenetworking.googleapis.com"
+    "servicenetworking.googleapis.com",
+    "artifactregistry.googleapis.com"
   ])
 
   service            = each.value
@@ -305,6 +306,16 @@ resource "google_project_iam_member" "api_cloudsql_client" {
   member  = "serviceAccount:${google_service_account.api_sa.email}"
 }
 
+# Artifact Registry — Docker image repository
+resource "google_artifact_registry_repository" "docker_repo" {
+  repository_id = "f1-optimizer"
+  format        = "DOCKER"
+  location      = "us-central1"
+  description   = "F1 Strategy Optimizer Docker images"
+
+  depends_on = [google_project_service.required_apis]
+}
+
 # Monitoring and Logging
 resource "google_monitoring_notification_channel" "email" {
   display_name = "F1 Optimizer Email Alerts"
@@ -327,6 +338,11 @@ resource "google_monitoring_alert_policy" "api_error_rate" {
       duration        = "60s"
       comparison      = "COMPARISON_GT"
       threshold_value = 0.05
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
+      }
     }
   }
 

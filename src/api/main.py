@@ -255,7 +255,7 @@ async def get_drivers(
             status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
         )
 
-    # Placeholder - would query BigQuery in production
+    # Placeholder - would query Cloud SQL in production
     drivers = [
         {
             "driver_id": "max_verstappen",

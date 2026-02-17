@@ -47,15 +47,6 @@ def sample_driver_data():
 
 
 @pytest.fixture
-def mock_bigquery_client():
-    """Mock BigQuery client for testing"""
-    from unittest.mock import MagicMock
-
-    client = MagicMock()
-    return client
-
-
-@pytest.fixture
 def mock_pubsub_client():
     """Mock Pub/Sub client for testing"""
     from unittest.mock import MagicMock

@@ -43,10 +43,10 @@ class Permission(str, Enum):
     DATA_WRITE = "data.write"
     DATA_DELETE = "data.delete"
 
-    # BigQuery permissions
-    BIGQUERY_QUERY = "bigquery.query"
-    BIGQUERY_TABLE_CREATE = "bigquery.table.create"
-    BIGQUERY_TABLE_UPDATE = "bigquery.table.update"
+    # Cloud SQL permissions
+    CLOUDSQL_QUERY = "cloudsql.query"
+    CLOUDSQL_TABLE_CREATE = "cloudsql.table.create"
+    CLOUDSQL_TABLE_UPDATE = "cloudsql.table.update"
 
     # Pub/Sub permissions
     PUBSUB_PUBLISH = "pubsub.publish"
@@ -71,23 +71,23 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
     Role.DATA_ENGINEER: {
         Permission.DATA_READ,
         Permission.DATA_WRITE,
-        Permission.BIGQUERY_QUERY,
-        Permission.BIGQUERY_TABLE_CREATE,
-        Permission.BIGQUERY_TABLE_UPDATE,
+        Permission.CLOUDSQL_QUERY,
+        Permission.CLOUDSQL_TABLE_CREATE,
+        Permission.CLOUDSQL_TABLE_UPDATE,
         Permission.PUBSUB_PUBLISH,
         Permission.PUBSUB_SUBSCRIBE,
         Permission.DATAFLOW_JOB_CREATE,
     },
     Role.ML_ENGINEER: {
         Permission.DATA_READ,
-        Permission.BIGQUERY_QUERY,
+        Permission.CLOUDSQL_QUERY,
         Permission.ML_MODEL_READ,
         Permission.ML_MODEL_WRITE,
         Permission.ML_MODEL_DEPLOY,
     },
     Role.DATA_VIEWER: {
         Permission.DATA_READ,
-        Permission.BIGQUERY_QUERY,
+        Permission.CLOUDSQL_QUERY,
     },
     Role.API_USER: {
         Permission.DATA_READ,
@@ -314,8 +314,8 @@ if __name__ == "__main__":
         print(f"Authenticated: {user.username}")
 
         # Check permissions
-        can_query = sim.check_permission(user, Permission.BIGQUERY_QUERY)
-        print(f"Can query BigQuery: {can_query}")
+        can_query = sim.check_permission(user, Permission.CLOUDSQL_QUERY)
+        print(f"Can query Cloud SQL: {can_query}")
 
         can_deploy = sim.check_permission(user, Permission.ML_MODEL_DEPLOY)
         print(f"Can deploy models: {can_deploy}")

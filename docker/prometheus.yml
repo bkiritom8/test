@@ -18,11 +18,6 @@ scrape_configs:
     metrics_path: /metrics
 
   # Mock services
-  - job_name: 'mock-bigquery'
-    static_configs:
-      - targets: ['mock-bigquery:9050']
-    metrics_path: /metrics
-
   - job_name: 'mock-dataflow'
     static_configs:
       - targets: ['mock-dataflow:9051']

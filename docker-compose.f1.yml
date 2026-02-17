@@ -113,26 +113,6 @@ services:
     networks:
       - f1-network
 
-  # Mock BigQuery Service
-  mock-bigquery:
-    build:
-      context: ./docker
-      dockerfile: Dockerfile.mock-bigquery
-    ports:
-      - "9050:9050"
-    environment:
-      LOG_LEVEL: INFO
-      MOCK_MODE: 'true'
-    volumes:
-      - bigquery-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:9050/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    networks:
-      - f1-network
-
   # Mock Pub/Sub Service (Google Pub/Sub Emulator)
   mock-pubsub:
     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
@@ -180,11 +160,9 @@ services:
     environment:
       ENV: local
       LOG_LEVEL: INFO
-      BIGQUERY_HOST: mock-bigquery:9050
       ENABLE_HTTPS: 'false'
       ENABLE_IAM: 'true'
     depends_on:
-      - mock-bigquery
       - mock-pubsub
     volumes:
       - ./src:/app/src
@@ -260,7 +238,6 @@ networks:
 
 volumes:
   postgres-data:
-  bigquery-data:
   prometheus-data:
   grafana-data:
   ray-data:

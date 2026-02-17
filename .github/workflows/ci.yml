@@ -151,8 +151,9 @@ jobs:
     needs: [lint, test]
 
     strategy:
+      fail-fast: false
       matrix:
-        service: [airflow, api, mock-bigquery, mock-dataflow]
+        service: [airflow, api, mock-dataflow]
 
     steps:
       - name: Checkout code

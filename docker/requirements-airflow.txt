@@ -3,7 +3,6 @@ apache-airflow-providers-google==10.14.0
 apache-airflow-providers-apache-beam==5.6.1
 
 # GCP
-google-cloud-bigquery==3.14.1
 google-cloud-pubsub==2.19.0
 google-cloud-storage==2.14.0
 

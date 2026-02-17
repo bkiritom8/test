@@ -5,7 +5,6 @@ Creates tables, indexes, and sample data for local development
 """
 
 import logging
-import sqlite3
 from pathlib import Path
 from datetime import datetime
 
@@ -43,118 +42,6 @@ def init_airflow_db():
         logger.error(f"❌ Failed to initialize Airflow database: {e}")
     except FileNotFoundError:
         logger.warning("⚠️ Airflow not found - skipping Airflow DB initialization")
-
-
-def init_mock_bigquery():
-    """Initialize mock BigQuery database"""
-    logger.info("Initializing mock BigQuery database...")
-
-    db_path = Path("/data/bigquery_mock.db")
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-
-    # Create tables
-    tables = [
-        """
-        CREATE TABLE IF NOT EXISTS f1_data.races (
-            race_id INTEGER PRIMARY KEY,
-            year INTEGER,
-            round INTEGER,
-            circuit_id TEXT,
-            name TEXT,
-            date TEXT,
-            time TEXT,
-            url TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS f1_data.drivers (
-            driver_id TEXT PRIMARY KEY,
-            driver_number INTEGER,
-            code TEXT,
-            forename TEXT,
-            surname TEXT,
-            dob TEXT,
-            nationality TEXT,
-            url TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS f1_data.results (
-            result_id INTEGER PRIMARY KEY,
-            race_id INTEGER,
-            driver_id TEXT,
-            constructor_id TEXT,
-            grid INTEGER,
-            position INTEGER,
-            position_text TEXT,
-            position_order INTEGER,
-            points REAL,
-            laps INTEGER,
-            time TEXT,
-            milliseconds INTEGER,
-            fastest_lap INTEGER,
-            rank INTEGER,
-            fastest_lap_time TEXT,
-            fastest_lap_speed REAL,
-            status_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (race_id) REFERENCES races(race_id),
-            FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS f1_data.lap_times (
-            lap_time_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            race_id INTEGER,
-            driver_id TEXT,
-            lap INTEGER,
-            position INTEGER,
-            time TEXT,
-            milliseconds INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (race_id) REFERENCES races(race_id),
-            FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
-        )
-        """
-    ]
-
-    for table_sql in tables:
-        cursor.execute(table_sql)
-
-    # Insert sample data
-    sample_races = [
-        (1, 2024, 1, 'bahrain', 'Bahrain Grand Prix', '2024-03-02', '15:00:00',
-         'http://en.wikipedia.org/wiki/2024_Bahrain_Grand_Prix')
-    ]
-
-    sample_drivers = [
-        ('max_verstappen', 1, 'VER', 'Max', 'Verstappen', '1997-09-30', 'Dutch',
-         'http://en.wikipedia.org/wiki/Max_Verstappen'),
-        ('lewis_hamilton', 44, 'HAM', 'Lewis', 'Hamilton', '1985-01-07', 'British',
-         'http://en.wikipedia.org/wiki/Lewis_Hamilton'),
-        ('charles_leclerc', 16, 'LEC', 'Charles', 'Leclerc', '1997-10-16', 'Monegasque',
-         'http://en.wikipedia.org/wiki/Charles_Leclerc')
-    ]
-
-    cursor.executemany(
-        "INSERT OR IGNORE INTO f1_data.races VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-        sample_races
-    )
-
-    cursor.executemany(
-        "INSERT OR IGNORE INTO f1_data.drivers VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-        sample_drivers
-    )
-
-    conn.commit()
-    conn.close()
-
-    logger.info("✅ Mock BigQuery database initialized")
 
 
 def create_directories():
@@ -219,9 +106,6 @@ def main():
 
     # Create directories
     create_directories()
-
-    # Initialize mock BigQuery
-    init_mock_bigquery()
 
     # Initialize Airflow (optional - only if Airflow is installed)
     # init_airflow_db()
