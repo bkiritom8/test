@@ -17,14 +17,10 @@ from prometheus_client import CONTENT_TYPE_LATEST
 
 # Import security components
 import sys
-sys.path.insert(0, '/app')
 
-from src.common.security.iam_simulator import (
-    iam_simulator,
-    Token,
-    User,
-    Permission
-)
+sys.path.insert(0, "/app")
+
+from src.common.security.iam_simulator import iam_simulator, Token, User, Permission
 from src.common.security.https_middleware import (
     HTTPSRedirectMiddleware,
     SecurityHeadersMiddleware,
@@ -32,32 +28,22 @@ from src.common.security.https_middleware import (
     RateLimitMiddleware,
     CORSMiddleware,
     get_current_user,
-    require_permission
 )
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
-    'api_requests_total',
-    'Total API requests',
-    ['method', 'endpoint', 'status']
+    "api_requests_total", "Total API requests", ["method", "endpoint", "status"]
 )
 REQUEST_DURATION = Histogram(
-    'api_request_duration_seconds',
-    'API request duration',
-    ['method', 'endpoint']
+    "api_request_duration_seconds", "API request duration", ["method", "endpoint"]
 )
-PREDICTION_COUNT = Counter(
-    'api_predictions_total',
-    'Total predictions made',
-    ['model']
-)
+PREDICTION_COUNT = Counter("api_predictions_total", "Total predictions made", ["model"])
 
 # Initialize FastAPI
 app = FastAPI(
@@ -65,7 +51,7 @@ app = FastAPI(
     description="Real-time race strategy recommendations with <500ms P99 latency",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Get configuration from environment
@@ -83,7 +69,7 @@ app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:8080", "*"],
-    allow_credentials=True
+    allow_credentials=True,
 )
 
 # OAuth2 scheme
@@ -93,6 +79,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # Pydantic models
 class HealthResponse(BaseModel):
     """Health check response"""
+
     status: str
     timestamp: str
     version: str
@@ -101,6 +88,7 @@ class HealthResponse(BaseModel):
 
 class StrategyRequest(BaseModel):
     """Strategy recommendation request"""
+
     race_id: str
     driver_id: str
     current_lap: int
@@ -112,6 +100,7 @@ class StrategyRequest(BaseModel):
 
 class StrategyRecommendation(BaseModel):
     """Strategy recommendation response"""
+
     recommended_action: str
     pit_window_start: Optional[int] = None
     pit_window_end: Optional[int] = None
@@ -129,7 +118,7 @@ async def root():
         "service": "F1 Strategy Optimizer API",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
@@ -140,7 +129,7 @@ async def health_check():
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
         version="1.0.0",
-        environment=ENV
+        environment=ENV,
     )
 
 
@@ -148,8 +137,7 @@ async def health_check():
 async def metrics():
     """Prometheus metrics endpoint"""
     return JSONResponse(
-        content=generate_latest().decode('utf-8'),
-        media_type=CONTENT_TYPE_LATEST
+        content=generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST
     )
 
 
@@ -159,11 +147,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = iam_simulator.authenticate_user(form_data.username, form_data.password)
 
     if not user:
-        REQUEST_COUNT.labels(
-            method='POST',
-            endpoint='/token',
-            status='401'
-        ).inc()
+        REQUEST_COUNT.labels(method="POST", endpoint="/token", status="401").inc()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -172,18 +156,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     # Create access token
     access_token = iam_simulator.create_access_token(
-        data={
-            "sub": user.username,
-            "roles": [r.value for r in user.roles]
-        },
-        expires_delta=timedelta(minutes=30)
+        data={"sub": user.username, "roles": [r.value for r in user.roles]},
+        expires_delta=timedelta(minutes=30),
     )
 
-    REQUEST_COUNT.labels(
-        method='POST',
-        endpoint='/token',
-        status='200'
-    ).inc()
+    REQUEST_COUNT.labels(method="POST", endpoint="/token", status="200").inc()
 
     logger.info(f"User {user.username} logged in successfully")
 
@@ -193,19 +170,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.get("/users/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """Get current user info"""
-    REQUEST_COUNT.labels(
-        method='GET',
-        endpoint='/users/me',
-        status='200'
-    ).inc()
+    REQUEST_COUNT.labels(method="GET", endpoint="/users/me", status="200").inc()
 
     return current_user
 
 
 @app.post("/strategy/recommend", response_model=StrategyRecommendation)
 async def recommend_strategy(
-    request: StrategyRequest,
-    current_user: User = Depends(get_current_user)
+    request: StrategyRequest, current_user: User = Depends(get_current_user)
 ):
     """
     Get race strategy recommendation
@@ -215,17 +187,15 @@ async def recommend_strategy(
     # Check permission
     if not iam_simulator.check_permission(current_user, Permission.ML_MODEL_READ):
         REQUEST_COUNT.labels(
-            method='POST',
-            endpoint='/strategy/recommend',
-            status='403'
+            method="POST", endpoint="/strategy/recommend", status="403"
         ).inc()
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
         )
 
     # Track request
     import time
+
     start_time = time.time()
 
     try:
@@ -238,23 +208,20 @@ async def recommend_strategy(
             target_compound="HARD" if request.current_compound == "MEDIUM" else "SOFT",
             driving_mode="BALANCED",
             brake_bias=52.5,
-            confidence=0.87
+            confidence=0.87,
         )
 
         # Track metrics
         duration = time.time() - start_time
-        REQUEST_DURATION.labels(
-            method='POST',
-            endpoint='/strategy/recommend'
-        ).observe(duration)
+        REQUEST_DURATION.labels(method="POST", endpoint="/strategy/recommend").observe(
+            duration
+        )
 
         REQUEST_COUNT.labels(
-            method='POST',
-            endpoint='/strategy/recommend',
-            status='200'
+            method="POST", endpoint="/strategy/recommend", status="200"
         ).inc()
 
-        PREDICTION_COUNT.labels(model='strategy_v1').inc()
+        PREDICTION_COUNT.labels(model="strategy_v1").inc()
 
         logger.info(
             f"Strategy recommendation for {request.driver_id} at lap {request.current_lap}: "
@@ -265,21 +232,18 @@ async def recommend_strategy(
 
     except Exception as e:
         REQUEST_COUNT.labels(
-            method='POST',
-            endpoint='/strategy/recommend',
-            status='500'
+            method="POST", endpoint="/strategy/recommend", status="500"
         ).inc()
         logger.error(f"Strategy recommendation error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error generating recommendation"
+            detail="Error generating recommendation",
         )
 
 
 @app.get("/data/drivers", response_model=List[Dict])
 async def get_drivers(
-    current_user: User = Depends(get_current_user),
-    year: Optional[int] = 2024
+    current_user: User = Depends(get_current_user), year: Optional[int] = 2024
 ):
     """
     Get driver list
@@ -288,29 +252,26 @@ async def get_drivers(
     """
     if not iam_simulator.check_permission(current_user, Permission.DATA_READ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
         )
 
     # Placeholder - would query BigQuery in production
     drivers = [
-        {"driver_id": "max_verstappen", "name": "Max Verstappen", "team": "Red Bull Racing"},
+        {
+            "driver_id": "max_verstappen",
+            "name": "Max Verstappen",
+            "team": "Red Bull Racing",
+        },
         {"driver_id": "lewis_hamilton", "name": "Lewis Hamilton", "team": "Mercedes"},
     ]
 
-    REQUEST_COUNT.labels(
-        method='GET',
-        endpoint='/data/drivers',
-        status='200'
-    ).inc()
+    REQUEST_COUNT.labels(method="GET", endpoint="/data/drivers", status="200").inc()
 
     return drivers
 
 
 @app.get("/models/status")
-async def get_models_status(
-    current_user: User = Depends(get_current_user)
-):
+async def get_models_status(current_user: User = Depends(get_current_user)):
     """
     Get ML models status
 
@@ -318,8 +279,7 @@ async def get_models_status(
     """
     if not iam_simulator.check_permission(current_user, Permission.ML_MODEL_READ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
         )
 
     # Placeholder - would query model registry
@@ -329,22 +289,18 @@ async def get_models_status(
             "version": "1.2.0",
             "status": "active",
             "accuracy": 0.92,
-            "last_updated": "2024-01-15T10:30:00Z"
+            "last_updated": "2024-01-15T10:30:00Z",
         },
         {
             "name": "fuel_consumption",
             "version": "1.1.0",
             "status": "active",
             "accuracy": 0.89,
-            "last_updated": "2024-01-10T14:20:00Z"
-        }
+            "last_updated": "2024-01-10T14:20:00Z",
+        },
     ]
 
-    REQUEST_COUNT.labels(
-        method='GET',
-        endpoint='/models/status',
-        status='200'
-    ).inc()
+    REQUEST_COUNT.labels(method="GET", endpoint="/models/status", status="200").inc()
 
     return {"models": models}
 
@@ -354,32 +310,22 @@ async def get_models_status(
 async def http_exception_handler(request, exc):
     """Handle HTTP exceptions"""
     REQUEST_COUNT.labels(
-        method=request.method,
-        endpoint=request.url.path,
-        status=exc.status_code
+        method=request.method, endpoint=request.url.path, status=exc.status_code
     ).inc()
 
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail}
-    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     """Handle general exceptions"""
     REQUEST_COUNT.labels(
-        method=request.method,
-        endpoint=request.url.path,
-        status='500'
+        method=request.method, endpoint=request.url.path, status="500"
     ).inc()
 
     logger.error(f"Unhandled exception: {exc}")
 
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 # Startup event
@@ -393,4 +339,5 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

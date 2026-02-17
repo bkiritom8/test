@@ -49,6 +49,10 @@ sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
 alembic==1.13.1
 
+# Security / Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
 # Utilities
 python-dotenv==1.0.0
 pyyaml==6.0.1

@@ -27,6 +27,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class Role(str, Enum):
     """IAM roles"""
+
     ADMIN = "roles/admin"
     DATA_ENGINEER = "roles/dataEngineer"
     ML_ENGINEER = "roles/mlEngineer"
@@ -36,6 +37,7 @@ class Role(str, Enum):
 
 class Permission(str, Enum):
     """Granular permissions"""
+
     # Data permissions
     DATA_READ = "data.read"
     DATA_WRITE = "data.write"
@@ -90,12 +92,13 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
     Role.API_USER: {
         Permission.DATA_READ,
         Permission.ML_MODEL_READ,
-    }
+    },
 }
 
 
 class User(BaseModel):
     """User model"""
+
     username: str
     email: str
     full_name: str
@@ -106,12 +109,14 @@ class User(BaseModel):
 
 class Token(BaseModel):
     """JWT token model"""
+
     access_token: str
     token_type: str
 
 
 class TokenData(BaseModel):
     """Token payload data"""
+
     username: Optional[str] = None
     roles: List[str] = []
 
@@ -128,7 +133,7 @@ class IAMSimulator:
                 "full_name": "Admin User",
                 "hashed_password": self._hash_password("admin"),
                 "roles": [Role.ADMIN],
-                "disabled": False
+                "disabled": False,
             },
             "data_engineer": {
                 "username": "data_engineer",
@@ -136,7 +141,7 @@ class IAMSimulator:
                 "full_name": "Data Engineer",
                 "hashed_password": self._hash_password("password"),
                 "roles": [Role.DATA_ENGINEER],
-                "disabled": False
+                "disabled": False,
             },
             "ml_engineer": {
                 "username": "ml_engineer",
@@ -144,7 +149,7 @@ class IAMSimulator:
                 "full_name": "ML Engineer",
                 "hashed_password": self._hash_password("password"),
                 "roles": [Role.ML_ENGINEER],
-                "disabled": False
+                "disabled": False,
             },
             "viewer": {
                 "username": "viewer",
@@ -152,8 +157,8 @@ class IAMSimulator:
                 "full_name": "Data Viewer",
                 "hashed_password": self._hash_password("password"),
                 "roles": [Role.DATA_VIEWER],
-                "disabled": False
-            }
+                "disabled": False,
+            },
         }
 
         logger.info("IAM Simulator initialized with sample users")
@@ -175,15 +180,10 @@ class IAMSimulator:
         if not self._verify_password(password, user_data["hashed_password"]):
             return None
 
-        return User(**{
-            k: v for k, v in user_data.items()
-            if k != "hashed_password"
-        })
+        return User(**{k: v for k, v in user_data.items() if k != "hashed_password"})
 
     def create_access_token(
-        self,
-        data: Dict,
-        expires_delta: Optional[timedelta] = None
+        self, data: Dict, expires_delta: Optional[timedelta] = None
     ) -> str:
         """Create JWT access token"""
         to_encode = data.copy()
@@ -227,16 +227,15 @@ class IAMSimulator:
 
         return permissions
 
-    def check_permission(
-        self,
-        user: User,
-        required_permission: Permission
-    ) -> bool:
+    def check_permission(self, user: User, required_permission: Permission) -> bool:
         """Check if user has required permission"""
         user_permissions = self.get_user_permissions(user)
 
         # Check for exact match or admin wildcard
-        if required_permission in user_permissions or Permission.ADMIN_ALL in user_permissions:
+        if (
+            required_permission in user_permissions
+            or Permission.ADMIN_ALL in user_permissions
+        ):
             logger.info(
                 f"Permission granted: {user.username} has {required_permission.value}"
             )
@@ -253,7 +252,7 @@ class IAMSimulator:
         email: str,
         full_name: str,
         password: str,
-        roles: List[Role]
+        roles: List[Role],
     ) -> User:
         """Add new user"""
         if username in self.users:
@@ -265,7 +264,7 @@ class IAMSimulator:
             "full_name": full_name,
             "hashed_password": self._hash_password(password),
             "roles": roles,
-            "disabled": False
+            "disabled": False,
         }
 
         self.users[username] = user_data

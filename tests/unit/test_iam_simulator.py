@@ -3,19 +3,13 @@ Unit tests for IAM/RBAC simulator
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import sys
-sys.path.insert(0, '/home/user/test')
 
-from src.common.security.iam_simulator import (
-    IAMSimulator,
-    Role,
-    Permission,
-    User,
-    Token,
-    TokenData
-)
+sys.path.insert(0, "/home/user/test")
+
+from src.common.security.iam_simulator import IAMSimulator, Role, Permission, User
 
 
 class TestIAMSimulator:
@@ -71,7 +65,7 @@ class TestIAMSimulator:
         """Test verification of expired token"""
         token = iam.create_access_token(
             data={"sub": "test_user", "roles": []},
-            expires_delta=timedelta(seconds=-1)  # Already expired
+            expires_delta=timedelta(seconds=-1),  # Already expired
         )
 
         token_data = iam.verify_token(token)
@@ -91,7 +85,7 @@ class TestIAMSimulator:
             username="admin",
             email="admin@test.com",
             full_name="Admin User",
-            roles=[Role.ADMIN]
+            roles=[Role.ADMIN],
         )
 
         permissions = iam.get_user_permissions(user)
@@ -105,7 +99,7 @@ class TestIAMSimulator:
             username="de",
             email="de@test.com",
             full_name="Data Engineer",
-            roles=[Role.DATA_ENGINEER]
+            roles=[Role.DATA_ENGINEER],
         )
 
         permissions = iam.get_user_permissions(user)
@@ -121,7 +115,7 @@ class TestIAMSimulator:
             username="de",
             email="de@test.com",
             full_name="Data Engineer",
-            roles=[Role.DATA_ENGINEER]
+            roles=[Role.DATA_ENGINEER],
         )
 
         has_permission = iam.check_permission(user, Permission.BIGQUERY_QUERY)
@@ -134,7 +128,7 @@ class TestIAMSimulator:
             username="viewer",
             email="viewer@test.com",
             full_name="Viewer",
-            roles=[Role.DATA_VIEWER]
+            roles=[Role.DATA_VIEWER],
         )
 
         has_permission = iam.check_permission(user, Permission.DATA_WRITE)
@@ -148,7 +142,7 @@ class TestIAMSimulator:
             email="new@test.com",
             full_name="New User",
             password="password123",
-            roles=[Role.API_USER]
+            roles=[Role.API_USER],
         )
 
         assert user.username == "new_user"
@@ -166,7 +160,7 @@ class TestIAMSimulator:
                 email="admin2@test.com",
                 full_name="Admin 2",
                 password="password",
-                roles=[Role.ADMIN]
+                roles=[Role.ADMIN],
             )
 
     def test_grant_role(self, iam):
@@ -177,7 +171,7 @@ class TestIAMSimulator:
             email="test@test.com",
             full_name="Test User",
             password="password",
-            roles=[Role.DATA_VIEWER]
+            roles=[Role.DATA_VIEWER],
         )
 
         # Grant additional role
@@ -199,7 +193,7 @@ class TestIAMSimulator:
             username="multi",
             email="multi@test.com",
             full_name="Multi Role User",
-            roles=[Role.DATA_ENGINEER, Role.ML_ENGINEER]
+            roles=[Role.DATA_ENGINEER, Role.ML_ENGINEER],
         )
 
         permissions = iam.get_user_permissions(user)

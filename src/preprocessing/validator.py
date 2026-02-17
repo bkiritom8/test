@@ -14,19 +14,20 @@ from enum import Enum
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class ValidationError(Exception):
     """Custom validation error"""
+
     pass
 
 
 class DataQualityLevel(str, Enum):
     """Data quality assessment levels"""
+
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
@@ -35,6 +36,7 @@ class DataQualityLevel(str, Enum):
 
 class RaceDataSchema(BaseModel):
     """Schema for race data validation"""
+
     race_id: int = Field(..., gt=0)
     year: int = Field(..., ge=1950, le=2024)
     round: int = Field(..., ge=1, le=25)
@@ -44,18 +46,19 @@ class RaceDataSchema(BaseModel):
     time: Optional[str] = None
     url: Optional[str] = None
 
-    @validator('date')
+    @validator("date")
     def validate_date(cls, v):
         """Validate date format"""
         try:
             datetime.fromisoformat(v)
             return v
         except ValueError:
-            raise ValueError('Invalid date format, expected ISO format')
+            raise ValueError("Invalid date format, expected ISO format")
 
 
 class DriverDataSchema(BaseModel):
     """Schema for driver data validation"""
+
     driver_id: str = Field(..., min_length=1)
     driver_number: Optional[int] = Field(None, ge=1, le=99)
     code: Optional[str] = Field(None, min_length=3, max_length=3)
@@ -65,20 +68,21 @@ class DriverDataSchema(BaseModel):
     nationality: str
     url: Optional[str] = None
 
-    @validator('dob')
+    @validator("dob")
     def validate_dob(cls, v):
         """Validate date of birth"""
         try:
             dob = datetime.fromisoformat(v)
             if dob.year < 1900 or dob.year > datetime.now().year - 16:
-                raise ValueError('Invalid birth year')
+                raise ValueError("Invalid birth year")
             return v
         except ValueError as e:
-            raise ValueError(f'Invalid date of birth: {e}')
+            raise ValueError(f"Invalid date of birth: {e}")
 
 
 class TelemetryDataSchema(BaseModel):
     """Schema for telemetry data validation"""
+
     race_id: str
     driver_id: str
     lap: int = Field(..., ge=1)
@@ -95,17 +99,17 @@ class DataValidator:
 
     def __init__(self):
         self.validation_stats = {
-            'total_records': 0,
-            'valid_records': 0,
-            'invalid_records': 0,
-            'warnings': []
+            "total_records": 0,
+            "valid_records": 0,
+            "invalid_records": 0,
+            "warnings": [],
         }
 
     def validate_dataframe(
         self,
         df: pd.DataFrame,
         schema_class: type[BaseModel],
-        required_columns: List[str] = None
+        required_columns: List[str] = None,
     ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
         Validate DataFrame against Pydantic schema
@@ -119,9 +123,7 @@ class DataValidator:
         if required_columns:
             missing_cols = set(required_columns) - set(df.columns)
             if missing_cols:
-                raise ValidationError(
-                    f"Missing required columns: {missing_cols}"
-                )
+                raise ValidationError(f"Missing required columns: {missing_cols}")
 
         valid_records = []
         invalid_records = []
@@ -136,28 +138,26 @@ class DataValidator:
                 valid_records.append(validated.dict())
 
             except Exception as e:
-                invalid_records.append({
-                    'index': idx,
-                    'record': row.to_dict(),
-                    'error': str(e)
-                })
+                invalid_records.append(
+                    {"index": idx, "record": row.to_dict(), "error": str(e)}
+                )
                 errors.append(str(e))
 
         # Create validated DataFrame
         valid_df = pd.DataFrame(valid_records) if valid_records else pd.DataFrame()
 
         # Update stats
-        self.validation_stats['total_records'] += len(df)
-        self.validation_stats['valid_records'] += len(valid_records)
-        self.validation_stats['invalid_records'] += len(invalid_records)
+        self.validation_stats["total_records"] += len(df)
+        self.validation_stats["valid_records"] += len(valid_records)
+        self.validation_stats["invalid_records"] += len(invalid_records)
 
         validation_report = {
-            'total': len(df),
-            'valid': len(valid_records),
-            'invalid': len(invalid_records),
-            'validation_rate': len(valid_records) / len(df) if len(df) > 0 else 0,
-            'errors': errors[:10],  # First 10 errors
-            'invalid_records': invalid_records[:10]  # First 10 invalid records
+            "total": len(df),
+            "valid": len(valid_records),
+            "invalid": len(invalid_records),
+            "validation_rate": len(valid_records) / len(df) if len(df) > 0 else 0,
+            "errors": errors[:10],  # First 10 errors
+            "invalid_records": invalid_records[:10],  # First 10 invalid records
         }
 
         logger.info(
@@ -168,9 +168,7 @@ class DataValidator:
         return valid_df, validation_report
 
     def check_data_quality(
-        self,
-        df: pd.DataFrame,
-        column_rules: Dict[str, Dict[str, Any]] = None
+        self, df: pd.DataFrame, column_rules: Dict[str, Dict[str, Any]] = None
     ) -> Tuple[DataQualityLevel, Dict[str, Any]]:
         """
         Assess data quality based on various metrics
@@ -185,18 +183,18 @@ class DataValidator:
         logger.info(f"Assessing data quality for {len(df)} records")
 
         quality_metrics = {
-            'completeness': {},
-            'validity': {},
-            'consistency': {},
-            'accuracy': {}
+            "completeness": {},
+            "validity": {},
+            "consistency": {},
+            "accuracy": {},
         }
 
         # Completeness: Check missing values
         for col in df.columns:
             null_pct = df[col].isnull().sum() / len(df) * 100
-            quality_metrics['completeness'][col] = {
-                'null_count': int(df[col].isnull().sum()),
-                'null_percentage': round(null_pct, 2)
+            quality_metrics["completeness"][col] = {
+                "null_count": int(df[col].isnull().sum()),
+                "null_percentage": round(null_pct, 2),
             }
 
         # Validity: Check data ranges
@@ -205,38 +203,40 @@ class DataValidator:
                 if col not in df.columns:
                     continue
 
-                if 'valid_range' in rules:
-                    min_val, max_val = rules['valid_range']
-                    out_of_range = df[
-                        (df[col] < min_val) | (df[col] > max_val)
-                    ].shape[0]
-                    quality_metrics['validity'][col] = {
-                        'out_of_range_count': out_of_range,
-                        'out_of_range_percentage': round(
+                if "valid_range" in rules:
+                    min_val, max_val = rules["valid_range"]
+                    out_of_range = df[(df[col] < min_val) | (df[col] > max_val)].shape[
+                        0
+                    ]
+                    quality_metrics["validity"][col] = {
+                        "out_of_range_count": out_of_range,
+                        "out_of_range_percentage": round(
                             out_of_range / len(df) * 100, 2
-                        )
+                        ),
                     }
 
         # Consistency: Check duplicates
         duplicate_count = df.duplicated().sum()
-        quality_metrics['consistency']['duplicates'] = {
-            'count': int(duplicate_count),
-            'percentage': round(duplicate_count / len(df) * 100, 2)
+        quality_metrics["consistency"]["duplicates"] = {
+            "count": int(duplicate_count),
+            "percentage": round(duplicate_count / len(df) * 100, 2),
         }
 
         # Calculate overall quality score (0-100)
         completeness_score = 100 - sum(
-            m['null_percentage'] for m in quality_metrics['completeness'].values()
+            m["null_percentage"] for m in quality_metrics["completeness"].values()
         ) / max(len(df.columns), 1)
 
         validity_score = 100
-        if quality_metrics['validity']:
+        if quality_metrics["validity"]:
             validity_score = 100 - sum(
-                m['out_of_range_percentage']
-                for m in quality_metrics['validity'].values()
-            ) / max(len(quality_metrics['validity']), 1)
+                m["out_of_range_percentage"]
+                for m in quality_metrics["validity"].values()
+            ) / max(len(quality_metrics["validity"]), 1)
 
-        consistency_score = 100 - quality_metrics['consistency']['duplicates']['percentage']
+        consistency_score = (
+            100 - quality_metrics["consistency"]["duplicates"]["percentage"]
+        )
 
         overall_score = (completeness_score + validity_score + consistency_score) / 3
 
@@ -251,14 +251,14 @@ class DataValidator:
             quality_level = DataQualityLevel.INVALID
 
         quality_report = {
-            'overall_score': round(overall_score, 2),
-            'quality_level': quality_level.value,
-            'metrics': quality_metrics,
-            'scores': {
-                'completeness': round(completeness_score, 2),
-                'validity': round(validity_score, 2),
-                'consistency': round(consistency_score, 2)
-            }
+            "overall_score": round(overall_score, 2),
+            "quality_level": quality_level.value,
+            "metrics": quality_metrics,
+            "scores": {
+                "completeness": round(completeness_score, 2),
+                "validity": round(validity_score, 2),
+                "consistency": round(consistency_score, 2),
+            },
         }
 
         logger.info(
@@ -275,24 +275,22 @@ class DataValidator:
         df_clean = df.copy()
 
         # Remove fully null rows
-        df_clean = df_clean.dropna(how='all')
+        df_clean = df_clean.dropna(how="all")
 
         # Strip whitespace from string columns
-        string_cols = df_clean.select_dtypes(include=['object']).columns
+        string_cols = df_clean.select_dtypes(include=["object"]).columns
         for col in string_cols:
             df_clean[col] = df_clean[col].str.strip()
 
         # Replace empty strings with NaN
-        df_clean = df_clean.replace(r'^\s*$', np.nan, regex=True)
+        df_clean = df_clean.replace(r"^\s*$", np.nan, regex=True)
 
         # Remove exact duplicates
         original_count = len(df_clean)
         df_clean = df_clean.drop_duplicates()
         duplicates_removed = original_count - len(df_clean)
 
-        logger.info(
-            f"Sanitization complete: removed {duplicates_removed} duplicates"
-        )
+        logger.info(f"Sanitization complete: removed {duplicates_removed} duplicates")
 
         return df_clean
 
@@ -300,10 +298,10 @@ class DataValidator:
         """Get cumulative validation statistics"""
         return {
             **self.validation_stats,
-            'validation_rate': (
-                self.validation_stats['valid_records'] /
-                max(self.validation_stats['total_records'], 1)
-            )
+            "validation_rate": (
+                self.validation_stats["valid_records"]
+                / max(self.validation_stats["total_records"], 1)
+            ),
         }
 
 
@@ -312,24 +310,23 @@ if __name__ == "__main__":
     validator = DataValidator()
 
     # Sample race data
-    race_data = pd.DataFrame([
-        {
-            'race_id': 1,
-            'year': 2024,
-            'round': 1,
-            'circuit_id': 'bahrain',
-            'name': 'Bahrain Grand Prix',
-            'date': '2024-03-02',
-            'time': '15:00:00',
-            'url': 'http://example.com'
-        }
-    ])
+    race_data = pd.DataFrame(
+        [
+            {
+                "race_id": 1,
+                "year": 2024,
+                "round": 1,
+                "circuit_id": "bahrain",
+                "name": "Bahrain Grand Prix",
+                "date": "2024-03-02",
+                "time": "15:00:00",
+                "url": "http://example.com",
+            }
+        ]
+    )
 
     # Validate
-    valid_df, report = validator.validate_dataframe(
-        race_data,
-        RaceDataSchema
-    )
+    valid_df, report = validator.validate_dataframe(race_data, RaceDataSchema)
 
     print(f"Validation report: {report}")
 

@@ -4,7 +4,7 @@ Includes TLS validation, security headers, and request validation.
 """
 
 import logging
-from typing import Callable, Optional
+from typing import Callable
 
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -58,10 +58,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
         response.headers["Content-Security-Policy"] = "default-src 'self'"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
 
         return response
 
@@ -77,7 +81,7 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
         if content_length and int(content_length) > self.MAX_CONTENT_LENGTH:
             return JSONResponse(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                content={"detail": "Request body too large"}
+                content={"detail": "Request body too large"},
             )
 
         # Validate request method
@@ -85,18 +89,16 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
         if request.method not in allowed_methods:
             return JSONResponse(
                 status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-                content={"detail": f"Method {request.method} not allowed"}
+                content={"detail": f"Method {request.method} not allowed"},
             )
 
         # Check for common attack patterns in query params
         for key, value in request.query_params.items():
             if self._is_suspicious(value):
-                logger.warning(
-                    f"Suspicious query parameter detected: {key}={value}"
-                )
+                logger.warning(f"Suspicious query parameter detected: {key}={value}")
                 return JSONResponse(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    content={"detail": "Invalid request parameters"}
+                    content={"detail": "Invalid request parameters"},
                 )
 
         response = await call_next(request)
@@ -105,16 +107,16 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
     def _is_suspicious(self, value: str) -> bool:
         """Check for common attack patterns"""
         suspicious_patterns = [
-            '<script',
-            'javascript:',
-            'onerror=',
-            'onclick=',
-            '../',
-            '..\\',
-            'SELECT * FROM',
-            'DROP TABLE',
-            'UNION SELECT',
-            '; DROP',
+            "<script",
+            "javascript:",
+            "onerror=",
+            "onclick=",
+            "../",
+            "..\\",
+            "SELECT * FROM",
+            "DROP TABLE",
+            "UNION SELECT",
+            "; DROP",
         ]
 
         value_lower = value.lower()
@@ -156,7 +158,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     return JSONResponse(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         content={"detail": "Rate limit exceeded"},
-                        headers={"Retry-After": str(self.window_seconds)}
+                        headers={"Retry-After": str(self.window_seconds)},
                     )
 
                 self.request_counts[client_ip] = (count + 1, window_start)
@@ -169,8 +171,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if client_ip in self.request_counts:
             count, _ = self.request_counts[client_ip]
             response.headers["X-RateLimit-Limit"] = str(self.max_requests)
-            response.headers["X-RateLimit-Remaining"] = str(max(0, self.max_requests - count))
-            response.headers["X-RateLimit-Reset"] = str(int(current_time + self.window_seconds))
+            response.headers["X-RateLimit-Remaining"] = str(
+                max(0, self.max_requests - count)
+            )
+            response.headers["X-RateLimit-Reset"] = str(
+                int(current_time + self.window_seconds)
+            )
 
         return response
 
@@ -179,13 +185,13 @@ class CORSMiddleware(BaseHTTPMiddleware):
     """CORS middleware with configurable origins"""
 
     def __init__(
-        self,
-        app: ASGIApp,
-        allow_origins: list = None,
-        allow_credentials: bool = True
+        self, app: ASGIApp, allow_origins: list = None, allow_credentials: bool = True
     ):
         super().__init__(app)
-        self.allow_origins = allow_origins or ["http://localhost:3000", "http://localhost:8080"]
+        self.allow_origins = allow_origins or [
+            "http://localhost:3000",
+            "http://localhost:8080",
+        ]
         self.allow_credentials = allow_credentials
 
     async def dispatch(self, request: Request, call_next: Callable):
@@ -199,9 +205,15 @@ class CORSMiddleware(BaseHTTPMiddleware):
         origin = request.headers.get("origin")
         if origin in self.allow_origins or "*" in self.allow_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = str(self.allow_credentials).lower()
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Credentials"] = str(
+                self.allow_credentials
+            ).lower()
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, DELETE, OPTIONS"
+            )
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization"
+            )
             response.headers["Access-Control-Max-Age"] = "3600"
 
         return response
@@ -209,16 +221,12 @@ class CORSMiddleware(BaseHTTPMiddleware):
 
 def verify_api_key(api_key: str) -> bool:
     """Verify API key (simple implementation for demo)"""
-    valid_keys = {
-        "dev-key-12345": "development",
-        "prod-key-67890": "production"
-    }
+    valid_keys = {"dev-key-12345": "development", "prod-key-67890": "production"}
     return api_key in valid_keys
 
 
 async def get_current_user(request: Request):
     """Extract and validate user from request"""
-    from .iam_simulator import TokenData
 
     # Check for Bearer token
     auth_header = request.headers.get("Authorization")
@@ -245,22 +253,24 @@ async def get_current_user(request: Request):
     if not user_data or user_data.get("disabled"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or disabled"
+            detail="User not found or disabled",
         )
 
     from .iam_simulator import User
+
     return User(**{k: v for k, v in user_data.items() if k != "hashed_password"})
 
 
 def require_permission(required_permission: Permission):
     """Decorator to require specific permission"""
+
     async def permission_checker(request: Request):
         user = await get_current_user(request)
 
         if not iam_simulator.check_permission(user, required_permission):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: {required_permission.value} required"
+                detail=f"Permission denied: {required_permission.value} required",
             )
 
         return user

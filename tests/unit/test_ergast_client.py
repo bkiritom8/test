@@ -3,11 +3,12 @@ Unit tests for Ergast API client
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import requests
 
 import sys
-sys.path.insert(0, '/home/user/test')
+
+sys.path.insert(0, "/home/user/test")
 
 from src.ingestion.ergast_client import ErgastClient, CircuitBreaker, Race, Driver
 
@@ -54,14 +55,7 @@ class TestErgastClient:
         mock = Mock()
         mock.status_code = 200
         mock.json.return_value = {
-            'MRData': {
-                'total': '1',
-                'SeasonTable': {
-                    'Seasons': [
-                        {'season': '2024'}
-                    ]
-                }
-            }
+            "MRData": {"total": "1", "SeasonTable": {"Seasons": [{"season": "2024"}]}}
         }
         return mock
 
@@ -71,7 +65,7 @@ class TestErgastClient:
         assert client.timeout == 10
         assert client.max_retries == 2
 
-    @patch('src.ingestion.ergast_client.requests.Session.get')
+    @patch("src.ingestion.ergast_client.requests.Session.get")
     def test_get_seasons(self, mock_get, client, mock_response):
         """Test getting seasons"""
         mock_get.return_value = mock_response
@@ -82,26 +76,26 @@ class TestErgastClient:
         assert 2024 in seasons
         mock_get.assert_called_once()
 
-    @patch('src.ingestion.ergast_client.requests.Session.get')
+    @patch("src.ingestion.ergast_client.requests.Session.get")
     def test_get_races(self, mock_get, client):
         """Test getting races for a season"""
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            'MRData': {
-                'RaceTable': {
-                    'Races': [
+            "MRData": {
+                "RaceTable": {
+                    "Races": [
                         {
-                            'season': '2024',
-                            'round': '1',
-                            'raceName': 'Bahrain Grand Prix',
-                            'Circuit': {
-                                'circuitId': 'bahrain',
-                                'circuitName': 'Bahrain International Circuit'
+                            "season": "2024",
+                            "round": "1",
+                            "raceName": "Bahrain Grand Prix",
+                            "Circuit": {
+                                "circuitId": "bahrain",
+                                "circuitName": "Bahrain International Circuit",
                             },
-                            'date': '2024-03-02',
-                            'time': '15:00:00Z',
-                            'url': 'http://example.com'
+                            "date": "2024-03-02",
+                            "time": "15:00:00Z",
+                            "url": "http://example.com",
                         }
                     ]
                 }
@@ -114,26 +108,26 @@ class TestErgastClient:
         assert len(races) == 1
         assert isinstance(races[0], Race)
         assert races[0].season == 2024
-        assert races[0].raceName == 'Bahrain Grand Prix'
+        assert races[0].raceName == "Bahrain Grand Prix"
 
-    @patch('src.ingestion.ergast_client.requests.Session.get')
+    @patch("src.ingestion.ergast_client.requests.Session.get")
     def test_get_drivers(self, mock_get, client):
         """Test getting drivers"""
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            'MRData': {
-                'DriverTable': {
-                    'Drivers': [
+            "MRData": {
+                "DriverTable": {
+                    "Drivers": [
                         {
-                            'driverId': 'max_verstappen',
-                            'permanentNumber': '1',
-                            'code': 'VER',
-                            'givenName': 'Max',
-                            'familyName': 'Verstappen',
-                            'dateOfBirth': '1997-09-30',
-                            'nationality': 'Dutch',
-                            'url': 'http://example.com'
+                            "driverId": "max_verstappen",
+                            "permanentNumber": "1",
+                            "code": "VER",
+                            "givenName": "Max",
+                            "familyName": "Verstappen",
+                            "dateOfBirth": "1997-09-30",
+                            "nationality": "Dutch",
+                            "url": "http://example.com",
                         }
                     ]
                 }
@@ -145,13 +139,14 @@ class TestErgastClient:
 
         assert len(drivers) == 1
         assert isinstance(drivers[0], Driver)
-        assert drivers[0].driverId == 'max_verstappen'
-        assert drivers[0].code == 'VER'
+        assert drivers[0].driverId == "max_verstappen"
+        assert drivers[0].code == "VER"
 
-    @patch('src.ingestion.ergast_client.requests.Session.get')
+    @patch("src.ingestion.ergast_client.requests.Session.get")
     def test_rate_limiting(self, mock_get, client, mock_response):
         """Test rate limiting enforcement"""
         import time
+
         mock_get.return_value = mock_response
 
         start = time.time()
@@ -162,7 +157,7 @@ class TestErgastClient:
         # Should have at least one rate limit delay
         assert elapsed >= client.RATE_LIMIT_DELAY
 
-    @patch('src.ingestion.ergast_client.requests.Session.get')
+    @patch("src.ingestion.ergast_client.requests.Session.get")
     def test_error_handling(self, mock_get, client):
         """Test error handling for failed requests"""
         mock_get.side_effect = requests.RequestException("Network error")
@@ -172,14 +167,11 @@ class TestErgastClient:
         # Should return empty list on error
         assert seasons == []
 
-    @patch('src.ingestion.ergast_client.requests.Session.get')
+    @patch("src.ingestion.ergast_client.requests.Session.get")
     def test_retry_logic(self, mock_get, client, mock_response):
         """Test retry logic on transient failures"""
         # First call fails, second succeeds
-        mock_get.side_effect = [
-            requests.Timeout("Timeout"),
-            mock_response
-        ]
+        mock_get.side_effect = [requests.Timeout("Timeout"), mock_response]
 
         seasons = client.get_seasons(2024, 2024)
 
@@ -200,7 +192,7 @@ class TestDataModels:
             circuitId="bahrain",
             circuitName="Bahrain International Circuit",
             date="2024-03-02",
-            url="http://example.com"
+            url="http://example.com",
         )
 
         assert race.season == 2024
@@ -215,7 +207,7 @@ class TestDataModels:
             familyName="Verstappen",
             dateOfBirth="1997-09-30",
             nationality="Dutch",
-            url="http://example.com"
+            url="http://example.com",
         )
 
         assert driver.driverId == "max_verstappen"

@@ -3,7 +3,6 @@ Structured logging utility for F1 Strategy Optimizer.
 Provides JSON-formatted logs with context and correlation IDs.
 """
 
-import json
 import logging
 import sys
 import uuid
@@ -17,10 +16,7 @@ class StructuredLogger:
     """Structured JSON logger with correlation tracking"""
 
     def __init__(
-        self,
-        name: str,
-        level: str = "INFO",
-        correlation_id: Optional[str] = None
+        self, name: str, level: str = "INFO", correlation_id: Optional[str] = None
     ):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(getattr(logging, level.upper()))
@@ -31,7 +27,7 @@ class StructuredLogger:
 
         # Create JSON formatter
         formatter = jsonlogger.JsonFormatter(
-            '%(timestamp)s %(level)s %(name)s %(correlation_id)s %(message)s'
+            "%(timestamp)s %(level)s %(name)s %(correlation_id)s %(message)s"
         )
 
         # Console handler
@@ -42,8 +38,8 @@ class StructuredLogger:
     def _add_context(self, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Add standard context to log entries"""
         context = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'correlation_id': self.correlation_id
+            "timestamp": datetime.utcnow().isoformat(),
+            "correlation_id": self.correlation_id,
         }
         if extra:
             context.update(extra)
