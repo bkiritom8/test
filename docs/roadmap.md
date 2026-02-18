@@ -36,20 +36,20 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Infrastructure**:
+[OK] **Infrastructure**:
 - [ ] GCP project created (`f1-strategy`)
 - [ ] IAM roles configured (service accounts)
 - [ ] BigQuery dataset created (`f1_strategy`)
 - [ ] Cloud Run, Dataflow, Vertex AI access enabled
 - [ ] Terraform configuration committed
 
-✅ **Data Ingestion**:
+[OK] **Data Ingestion**:
 - [ ] Ergast API data downloaded (1950-2024, 1,300+ races)
 - [ ] FastF1 telemetry downloaded (2018-2024, 200+ races)
 - [ ] Data uploaded to BigQuery raw tables
 - [ ] Data completeness validated (≥95%)
 
-✅ **Documentation**:
+[OK] **Documentation**:
 - [ ] `setup.sh` script tested
 - [ ] `data/schema.sql` defined
 - [ ] README updated with quick start
@@ -76,25 +76,25 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Preprocessing Pipeline**:
+[OK] **Preprocessing Pipeline**:
 - [ ] Outlier removal (lap times, fuel values)
 - [ ] Missing data imputation (telemetry gaps)
 - [ ] Tire compound standardization (historical mapping)
 - [ ] Race alignment (results + pit stops)
 
-✅ **Feature Engineering**:
+[OK] **Feature Engineering**:
 - [ ] Tire age calculation
 - [ ] Fuel remaining estimation
 - [ ] Telemetry aggregation (mean throttle, max speed, brake count)
 - [ ] Race context features (gap to leader, position delta)
 - [ ] Temporal features (lap number, stint age, laps remaining)
 
-✅ **Data Splits**:
+[OK] **Data Splits**:
 - [ ] `f1_strategy.train` (1950-2022, ~140GB)
 - [ ] `f1_strategy.validation` (2023 Q1-Q2, ~5GB)
 - [ ] `f1_strategy.test` (2023 Q3-Q4 + 2024, ~10GB)
 
-✅ **Feature Store**:
+[OK] **Feature Store**:
 - [ ] `f1_features` table created
 - [ ] Schema documented in `data/schema.sql`
 
@@ -118,18 +118,18 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Profile Extraction**:
+[OK] **Profile Extraction**:
 - [ ] Aggression score (mean throttle, overtake frequency)
 - [ ] Consistency (std_dev of lap times)
 - [ ] Pressure response (lap time delta under competition)
 - [ ] Tire management (degradation vs teammates)
 
-✅ **Validation**:
-- [ ] Aggression correlation: r > 0.7 ✅
-- [ ] Consistency accuracy: <5% error ✅
-- [ ] Pressure response MAE: <50ms ✅
+[OK] **Validation**:
+- [ ] Aggression correlation: r > 0.7 [OK]
+- [ ] Consistency accuracy: <5% error [OK]
+- [ ] Pressure response MAE: <50ms [OK]
 
-✅ **Outputs**:
+[OK] **Outputs**:
 - [ ] `drivers/profiles.json` (200+ profiles)
 - [ ] Visualization: Scatter plot (aggression vs consistency)
 - [ ] Dashboard component: Driver profile viewer
@@ -156,21 +156,21 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Tire Degradation Model (XGBoost)**:
+[OK] **Tire Degradation Model (XGBoost)**:
 - [ ] Model trained on 1950-2022 data
 - [ ] Hyperparameter tuning (max_depth, learning_rate, n_estimators)
-- [ ] Validation: MAE < 50ms ✅
+- [ ] Validation: MAE < 50ms [OK]
 - [ ] Feature importance analysis
 - [ ] Model saved to `models/artifacts/tire_degradation_v1.json`
 
-✅ **Fuel Consumption Model (LSTM)**:
+[OK] **Fuel Consumption Model (LSTM)**:
 - [ ] Sequence preparation (10 laps lookback)
 - [ ] Model trained with early stopping
-- [ ] Validation: RMSE < 0.5 kg/lap ✅
+- [ ] Validation: RMSE < 0.5 kg/lap [OK]
 - [ ] Loss curves plotted
 - [ ] Model saved to `models/artifacts/fuel_consumption_v1.h5`
 
-✅ **Model Registry**:
+[OK] **Model Registry**:
 - [ ] Both models registered in Vertex AI
 - [ ] Metadata tracked (training date, metrics, hyperparameters)
 
@@ -194,20 +194,20 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Brake Bias Model (Linear Regression)**:
+[OK] **Brake Bias Model (Linear Regression)**:
 - [ ] Model trained on telemetry data
 - [ ] Feature standardization (StandardScaler)
-- [ ] Validation: ±1% accuracy ✅
+- [ ] Validation: ±1% accuracy [OK]
 - [ ] Model saved to `models/artifacts/brake_bias_v1.pkl`
 
-✅ **Driving Style Classifier (Decision Tree)**:
+[OK] **Driving Style Classifier (Decision Tree)**:
 - [ ] Labels created from aggressive_score
 - [ ] Model trained with class weighting
-- [ ] Validation: ≥75% accuracy ✅
+- [ ] Validation: ≥75% accuracy [OK]
 - [ ] Confusion matrix analyzed
 - [ ] Model saved to `models/artifacts/driving_style_v1.pkl`
 
-✅ **Unified Training Pipeline**:
+[OK] **Unified Training Pipeline**:
 - [ ] `models/train.py` script (train all 4 models)
 - [ ] Automated validation reporting
 - [ ] Model versioning implemented
@@ -234,25 +234,25 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Race Simulator**:
+[OK] **Race Simulator**:
 - [ ] `simulation/race_simulator.py` implemented
 - [ ] Integrates all 4 models + driver profiles
 - [ ] Simulates lap-by-lap (tire deg, fuel burn, pit stops)
 - [ ] Returns finishing position, total time, fuel remaining
 
-✅ **Monte Carlo Optimization**:
+[OK] **Monte Carlo Optimization**:
 - [ ] Generate pit strategy candidates (500-1000)
 - [ ] Simulate each strategy 20 times (with noise)
 - [ ] Rank by win probability
 - [ ] Return top 3 strategies
 
-✅ **Validation**:
-- [ ] Podium accuracy: ≥70% ✅
-- [ ] Winner accuracy: ≥65% ✅
-- [ ] Finishing order correlation: Spearman >0.75 ✅
-- [ ] Pit timing accuracy: ±2 laps (70%+ races) ✅
+[OK] **Validation**:
+- [ ] Podium accuracy: ≥70% [OK]
+- [ ] Winner accuracy: ≥65% [OK]
+- [ ] Finishing order correlation: Spearman >0.75 [OK]
+- [ ] Pit timing accuracy: ±2 laps (70%+ races) [OK]
 
-✅ **Optimization**:
+[OK] **Optimization**:
 - [ ] GPU acceleration for Monte Carlo
 - [ ] Reduce to 5K scenarios for live inference
 - [ ] Caching for common race scenarios
@@ -279,28 +279,28 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **FastAPI Server**:
+[OK] **FastAPI Server**:
 - [ ] `serving/api.py` implemented
 - [ ] `/recommend` endpoint (pit strategy, driving mode, brake bias)
 - [ ] `/simulate` endpoint (full race simulation)
 - [ ] `/driver-profile/{id}` endpoint
 - [ ] Health check endpoint (`/health`)
-- [ ] Deployed to Cloud Run (<500ms P99 latency ✅)
+- [ ] Deployed to Cloud Run (<500ms P99 latency [OK])
 
-✅ **React Dashboard**:
+[OK] **React Dashboard**:
 - [ ] Component 1: Driver Profile Viewer (scatter plot)
 - [ ] Component 2: Lap-by-Lap Guidance Panel
 - [ ] Component 3: Race Simulation Visualizer
 - [ ] Component 4: Historical Analysis Comparison
 - [ ] Deployed to Vercel/Cloud Run
 
-✅ **Streaming Pipeline (Optional for Live Races)**:
+[OK] **Streaming Pipeline (Optional for Live Races)**:
 - [ ] Pub/Sub topic created (`telemetry-topic`)
 - [ ] Dataflow job deployed (`pipeline/dataflow_job.py`)
 - [ ] Real-time feature extraction
-- [ ] End-to-end latency <5s ✅
+- [ ] End-to-end latency <5s [OK]
 
-✅ **Load Testing**:
+[OK] **Load Testing**:
 - [ ] API tested at 2x expected traffic
 - [ ] P99 latency <500ms confirmed
 - [ ] Auto-scaling validated (1-20 instances)
@@ -328,34 +328,34 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 **Deliverables**:
 
-✅ **Testing**:
-- [ ] Unit tests: 80%+ coverage ✅
+[OK] **Testing**:
+- [ ] Unit tests: 80%+ coverage [OK]
 - [ ] Integration tests: End-to-end pipeline
 - [ ] Load tests: 2x traffic, no degradation
 - [ ] Validation tests: All metrics on test set
 - [ ] Test report generated
 
-✅ **Monitoring**:
+[OK] **Monitoring**:
 - [ ] Cloud Monitoring dashboards (4 dashboards)
 - [ ] Alert policies configured (6 alerts)
 - [ ] Slack webhook integration
 - [ ] Cost tracking enabled
 - [ ] Drift detection scheduled (weekly)
 
-✅ **Documentation**:
+[OK] **Documentation**:
 - [ ] README.md finalized
 - [ ] API documentation (auto-generated from FastAPI)
 - [ ] ARCHITECTURE.md complete
 - [ ] DATA_DICTIONARY.md complete
 - [ ] DEPLOYMENT.md runbook
 
-✅ **Demonstrations**:
+[OK] **Demonstrations**:
 - [ ] Demo 1: Driver profiles scatter plot
 - [ ] Demo 2: Live race simulation (Monaco 2024)
 - [ ] Demo 3: Validation results (podium accuracy)
 - [ ] Demo 4: API call (<500ms response time)
 
-✅ **Launch Readiness**:
+[OK] **Launch Readiness**:
 - [ ] All acceptance criteria met
 - [ ] Stakeholder presentation prepared
 - [ ] Code review completed
@@ -366,7 +366,7 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 - All monitoring configured
 - All documentation complete
 - Demos successful
-- Stakeholder approval ✅
+- Stakeholder approval [OK]
 
 **Dependencies**: Week 10-11 deployment complete
 
@@ -376,14 +376,14 @@ Setup & Data            Model Dev            Integration Deployment  Test & Laun
 
 | Week | Milestone | Status | Deliverable |
 |------|-----------|--------|-------------|
-| 2 | Data Ingestion Complete | ⏳ Pending | BigQuery raw tables (150GB) |
-| 3 | Feature Store Ready | ⏳ Pending | `f1_features` table (1M+ rows) |
-| 4 | Driver Profiles Extracted | ⏳ Pending | `profiles.json` (200+ drivers) |
-| 6 | Models 1-2 Trained | ⏳ Pending | Tire degradation + Fuel consumption |
-| 7 | All 4 Models Trained | ⏳ Pending | All models meet accuracy targets |
-| 9 | Simulator Validated | ⏳ Pending | Podium accuracy ≥70% |
-| 11 | API Deployed | ⏳ Pending | Cloud Run, <500ms P99 |
-| 13 | Project Complete | ⏳ Pending | All acceptance criteria met |
+| 2 | Data Ingestion Complete | [Pending] Pending | BigQuery raw tables (150GB) |
+| 3 | Feature Store Ready | [Pending] Pending | `f1_features` table (1M+ rows) |
+| 4 | Driver Profiles Extracted | [Pending] Pending | `profiles.json` (200+ drivers) |
+| 6 | Models 1-2 Trained | [Pending] Pending | Tire degradation + Fuel consumption |
+| 7 | All 4 Models Trained | [Pending] Pending | All models meet accuracy targets |
+| 9 | Simulator Validated | [Pending] Pending | Podium accuracy ≥70% |
+| 11 | API Deployed | [Pending] Pending | Cloud Run, <500ms P99 |
+| 13 | Project Complete | [Pending] Pending | All acceptance criteria met |
 
 ## Critical Path
 

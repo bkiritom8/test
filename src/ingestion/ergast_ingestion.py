@@ -18,7 +18,7 @@ from src.database.connection import ManagedConnection
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://ergast.com/api/f1"
-_RATE_LIMIT_DELAY = 0.5   # seconds between every HTTP request
+_RATE_LIMIT_DELAY = 0.5  # seconds between every HTTP request
 _PAGE_SIZE = 100
 _TIMEOUT = 30
 
@@ -26,6 +26,7 @@ _TIMEOUT = 30
 # ---------------------------------------------------------------------------
 # HTTP helpers
 # ---------------------------------------------------------------------------
+
 
 def _get(url: str, params: Optional[dict] = None) -> dict:
     """GET with rate-limiting and up to 3 retries."""
@@ -41,7 +42,9 @@ def _get(url: str, params: Optional[dict] = None) -> dict:
             return resp.json()
         except requests.exceptions.RequestException as exc:
             if attempt < 2:
-                logger.warning("Request failed (attempt %d/3): %s. Retrying…", attempt + 1, exc)
+                logger.warning(
+                    "Request failed (attempt %d/3): %s. Retrying…", attempt + 1, exc
+                )
                 time.sleep(_RATE_LIMIT_DELAY * (attempt + 2))
             else:
                 raise
@@ -68,6 +71,7 @@ def _paginate(url: str, table_key: str, inner_key: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Individual ingestors
 # ---------------------------------------------------------------------------
+
 
 def ingest_seasons(conn: Any) -> list[int]:
     logger.info("Ingesting seasons…")
@@ -112,7 +116,9 @@ def ingest_drivers(conn: Any) -> None:
 
 def ingest_constructors(conn: Any) -> None:
     logger.info("Ingesting constructors…")
-    constructors = _paginate(f"{_BASE_URL}/constructors.json", "ConstructorTable", "Constructors")
+    constructors = _paginate(
+        f"{_BASE_URL}/constructors.json", "ConstructorTable", "Constructors"
+    )
     for c in constructors:
         conn.run(
             """INSERT INTO constructors (constructor_id, name, nationality)
@@ -202,7 +208,11 @@ def ingest_results(conn: Any, season: int, round_num: int) -> None:
                 time_millis=int(r["Time"]["millis"]) if r.get("Time") else None,
                 fastest_lap=int(fl["lap"]) if fl else None,
                 fastest_lap_time=fl.get("Time", {}).get("time") if fl else None,
-                fastest_lap_speed=float(fl["AverageSpeed"]["speed"]) if fl and fl.get("AverageSpeed") else None,
+                fastest_lap_speed=(
+                    float(fl["AverageSpeed"]["speed"])
+                    if fl and fl.get("AverageSpeed")
+                    else None
+                ),
             )
     except Exception as exc:
         logger.warning("results %d/%d: %s", season, round_num, exc)
@@ -317,7 +327,9 @@ def ingest_driver_standings(conn: Any, season: int, round_num: int) -> None:
         for standing in lists[0].get("DriverStandings", []):
             driver = standing.get("Driver", {})
             constructors = standing.get("Constructors", [{}])
-            constructor_id = constructors[0].get("constructorId", "") if constructors else ""
+            constructor_id = (
+                constructors[0].get("constructorId", "") if constructors else ""
+            )
             conn.run(
                 """INSERT INTO driver_standings
                      (season, round, driver_id, constructor_id, points, position, wins)
@@ -367,6 +379,7 @@ def ingest_constructor_standings(conn: Any, season: int, round_num: int) -> None
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def run_ingestion(start_season: int = 1950, end_season: Optional[int] = None) -> None:
     """Run full historical ingestion from the Ergast API."""
     logger.info("Starting Ergast ingestion from season %d", start_season)
@@ -401,7 +414,9 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    parser = argparse.ArgumentParser(description="Ingest F1 historical data from Ergast API")
+    parser = argparse.ArgumentParser(
+        description="Ingest F1 historical data from Ergast API"
+    )
     parser.add_argument("--start-season", type=int, default=1950)
     parser.add_argument("--end-season", type=int, default=None)
     args = parser.parse_args()

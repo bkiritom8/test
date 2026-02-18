@@ -601,9 +601,9 @@ BigQuery Tables (Processed/Validated Data):
 ```
 
 **Prohibited Sources**:
-- ❌ `raw_races`, `raw_results`, `raw_telemetry` (training never reads raw data)
-- ❌ `processed_data` (must use versioned train/val/test splits)
-- ❌ Any streaming Pub/Sub topics (training is batch-only)
+- [FAIL] `raw_races`, `raw_results`, `raw_telemetry` (training never reads raw data)
+- [FAIL] `processed_data` (must use versioned train/val/test splits)
+- [FAIL] Any streaming Pub/Sub topics (training is batch-only)
 
 ### Data Output Destinations
 
@@ -636,9 +636,9 @@ GCS Buckets:
 ```
 
 **Prohibited Destinations**:
-- ❌ Training jobs NEVER write to BigQuery `raw_*` tables
-- ❌ Training jobs NEVER write to `processed_data` tables
-- ❌ Training jobs NEVER modify feature store directly
+- [FAIL] Training jobs NEVER write to BigQuery `raw_*` tables
+- [FAIL] Training jobs NEVER write to `processed_data` tables
+- [FAIL] Training jobs NEVER modify feature store directly
 
 ### Training Job Architecture
 
@@ -777,9 +777,9 @@ Permissions:
     - roles/aiplatform.user        # Submit training jobs
 
   Denied:
-    - ❌ bigquery.dataEditor       # CANNOT modify BigQuery tables
-    - ❌ storage.admin             # CANNOT delete artifacts
-    - ❌ compute.admin             # CANNOT modify infrastructure
+    - [FAIL] bigquery.dataEditor       # CANNOT modify BigQuery tables
+    - [FAIL] storage.admin             # CANNOT delete artifacts
+    - [FAIL] compute.admin             # CANNOT modify infrastructure
 ```
 
 **Network Security**:
@@ -1514,11 +1514,11 @@ Medium Alerts:
 ```
 
 **Observability Scope**:
-- ✓ Data ingestion (Ergast, FastF1)
-- ✓ Data processing and cleaning
-- ✓ Data validation stages
-- ✓ Feature engineering and aggregation
-- ✓ Distributed training (see docs/training-pipeline.md)
+- [OK] Data ingestion (Ergast, FastF1)
+- [OK] Data processing and cleaning
+- [OK] Data validation stages
+- [OK] Feature engineering and aggregation
+- [OK] Distributed training (see docs/training-pipeline.md)
 
 ### Cost Controls
 
@@ -1699,7 +1699,7 @@ Isolation Levels:
        * Live dashboards
 
 Prohibited Scope:
-  ❌ System-Wide Failures:
+  [FAIL] System-Wide Failures:
      - One pipeline failure NEVER blocks others
      - Orchestrator failure auto-recovers (max 5min downtime)
      - No shared state between pipelines
@@ -1742,7 +1742,7 @@ Pipeline Independence:
 ┌─────────────────────────────────────────────────────┐
 │                                                     │
 │  ┌──────────────┐         ┌──────────────┐         │
-│  │ Data         │    ╳    │ Training     │         │
+│  │ Data         │    X    │ Training     │         │
 │  │ Pipeline     │ Isolated│ Pipeline     │         │
 │  │ (Running)    │         │ (Failed)     │         │
 │  └──────────────┘         └──────────────┘         │
@@ -1772,10 +1772,10 @@ DAG Branch Isolation:
   ▼      ▼                   ▼
 ┌────┐ ┌────┐             ┌────┐
 │Train│ │Val │  (Failed)  │Test│
-│Split│ │Split│     ╳      │Split│
+│Split│ │Split│     X      │Split│
 └────┘ └────┘             └────┘
   │      │                   │
-  │      ╳                   │
+  │      X                   │
   │                          │
   └──────────┬───────────────┘
              ▼
@@ -1955,10 +1955,10 @@ Reproducibility Example:
     --output-path gs://f1-strategy-artifacts/replays/
 
   # Verifies:
-  # ✓ Git commit SHA matches
-  # ✓ Container image digests match
-  # ✓ Input data checksums match
-  # ✓ Output artifacts match (bit-for-bit)
+  # [OK] Git commit SHA matches
+  # [OK] Container image digests match
+  # [OK] Input data checksums match
+  # [OK] Output artifacts match (bit-for-bit)
 ```
 
 **Compliance Retention**:

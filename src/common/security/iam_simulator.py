@@ -162,11 +162,15 @@ class IAMSimulator:
 
     def _hash_password(self, password: str) -> str:
         """Hash password"""
-        return bcrypt.hashpw(password.encode('utf-8')[:72], bcrypt.gensalt()).decode('utf-8')
+        return bcrypt.hashpw(password.encode("utf-8")[:72], bcrypt.gensalt()).decode(
+            "utf-8"
+        )
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify password"""
-        return bcrypt.checkpw(plain_password.encode('utf-8')[:72], hashed_password.encode('utf-8'))
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8")[:72], hashed_password.encode("utf-8")
+        )
 
     def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """Authenticate user with username and password"""

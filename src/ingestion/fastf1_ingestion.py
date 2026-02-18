@@ -42,6 +42,7 @@ def _setup_cache() -> None:
 # Weather
 # ---------------------------------------------------------------------------
 
+
 def _ingest_weather(
     conn,
     session: fastf1.core.Session,
@@ -94,6 +95,7 @@ def _ingest_weather(
 # Lap features
 # ---------------------------------------------------------------------------
 
+
 def _ingest_lap_features(
     conn,
     session: fastf1.core.Session,
@@ -123,8 +125,12 @@ def _ingest_lap_features(
                 mask = weather.get("Time", pd.Series(dtype="object")) <= lap_start
                 if mask.any():
                     w = weather[mask].iloc[-1]
-                    track_temp = float(w["TrackTemp"]) if pd.notna(w.get("TrackTemp")) else None
-                    air_temp = float(w["AirTemp"]) if pd.notna(w.get("AirTemp")) else None
+                    track_temp = (
+                        float(w["TrackTemp"]) if pd.notna(w.get("TrackTemp")) else None
+                    )
+                    air_temp = (
+                        float(w["AirTemp"]) if pd.notna(w.get("AirTemp")) else None
+                    )
 
         track_status = str(lap.get("TrackStatus", ""))
         is_sc = track_status in {"4", "5", "6", "7"}
@@ -159,7 +165,7 @@ def _ingest_lap_features(
                 compound=str(compound) if pd.notna(compound) else None,
                 tyre_life=int(tyre_life) if pd.notna(tyre_life) else None,
                 stint=int(stint) if pd.notna(stint) else None,
-                fuel_load=None,   # not directly available from FastF1
+                fuel_load=None,  # not directly available from FastF1
                 track_temp=track_temp,
                 air_temp=air_temp,
                 is_sc=is_sc,
@@ -171,6 +177,7 @@ def _ingest_lap_features(
 # ---------------------------------------------------------------------------
 # Telemetry features
 # ---------------------------------------------------------------------------
+
 
 def _ingest_telemetry_features(
     conn,
@@ -224,25 +231,26 @@ def _ingest_telemetry_features(
                     max_speed=_agg("Speed", "max"),
                 )
             except Exception as exc:
-                logger.debug("telemetry driver=%s lap=%d: %s", driver_abbr, lap_number, exc)
+                logger.debug(
+                    "telemetry driver=%s lap=%d: %s", driver_abbr, lap_number, exc
+                )
 
 
 # ---------------------------------------------------------------------------
 # Driver profiles
 # ---------------------------------------------------------------------------
 
+
 def compute_driver_profiles(conn) -> None:
     """Compute aggression/consistency/total_laps and upsert into driver_profiles."""
     logger.info("Computing driver profiles…")
 
-    rows = conn.run(
-        """SELECT driver_id,
+    rows = conn.run("""SELECT driver_id,
                   AVG(mean_throttle) AS aggression_score,
                   COUNT(*)           AS total_laps
            FROM   telemetry_features
            WHERE  mean_throttle IS NOT NULL
-           GROUP BY driver_id"""
-    )
+           GROUP BY driver_id""")
 
     if not rows:
         logger.info("No telemetry data yet; skipping driver profile computation.")
@@ -261,7 +269,9 @@ def compute_driver_profiles(conn) -> None:
             driver_id=driver_id,
         )
         std_val = std_rows[0][0] if std_rows and std_rows[0][0] is not None else None
-        consistency_score = 1.0 / float(std_val) if std_val and float(std_val) > 0 else None
+        consistency_score = (
+            1.0 / float(std_val) if std_val and float(std_val) > 0 else None
+        )
 
         conn.run(
             """INSERT INTO driver_profiles
@@ -286,8 +296,11 @@ def compute_driver_profiles(conn) -> None:
 # Session loader
 # ---------------------------------------------------------------------------
 
+
 def _circuit_id(session: fastf1.core.Session) -> str:
-    name = session.event.get("OfficialEventName", session.event.get("EventName", "unknown"))
+    name = session.event.get(
+        "OfficialEventName", session.event.get("EventName", "unknown")
+    )
     return str(name).lower().replace(" ", "_")
 
 
@@ -305,12 +318,19 @@ def ingest_session(
         _ingest_lap_features(conn, session, season, round_num, cid)
         _ingest_telemetry_features(conn, session, season, round_num, cid)
     except Exception as exc:
-        logger.warning("Session %d/%d/%s could not be loaded: %s", season, round_num, session_type, exc)
+        logger.warning(
+            "Session %d/%d/%s could not be loaded: %s",
+            season,
+            round_num,
+            session_type,
+            exc,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) -> None:
     current_year = end_year or datetime.date.today().year

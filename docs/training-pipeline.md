@@ -1090,17 +1090,17 @@ ORDER BY date DESC;
 **Training Service Account Permissions** (Minimal):
 ```
 READ:
-  ✓ BigQuery: f1_strategy.train, f1_strategy.validation
-  ✓ GCS: gs://f1-strategy-models/* (read trained models)
+  [OK] BigQuery: f1_strategy.train, f1_strategy.validation
+  [OK] GCS: gs://f1-strategy-models/* (read trained models)
 
 WRITE:
-  ✓ GCS: gs://f1-strategy-artifacts/* (write new artifacts)
+  [OK] GCS: gs://f1-strategy-artifacts/* (write new artifacts)
 
 DENIED:
-  ✗ BigQuery: raw_*, processed_data (cannot modify source data)
-  ✗ GCS: Delete operations on production buckets
-  ✗ Compute: Create/delete infrastructure
-  ✗ IAM: Modify service accounts or permissions
+  [FAIL] BigQuery: raw_*, processed_data (cannot modify source data)
+  [FAIL] GCS: Delete operations on production buckets
+  [FAIL] Compute: Create/delete infrastructure
+  [FAIL] IAM: Modify service accounts or permissions
 ```
 
 ### Network Isolation
@@ -1814,12 +1814,12 @@ Training Cost Metrics:
 ```
 
 **Cost Optimization (Training)**:
-- ✓ Preemptible VMs (70% cost reduction, with checkpoint/retry logic)
-- ✓ Scale to zero when no jobs running
-- ✓ Right-sized instances per model (small models use smaller instances)
-- ✓ Checkpoint cleanup (delete after 7 days)
-- ✓ Cached preprocessed features (reduce BigQuery costs)
-- ✓ Spot instances with aggressive bidding
+- [OK] Preemptible VMs (70% cost reduction, with checkpoint/retry logic)
+- [OK] Scale to zero when no jobs running
+- [OK] Right-sized instances per model (small models use smaller instances)
+- [OK] Checkpoint cleanup (delete after 7 days)
+- [OK] Cached preprocessed features (reduce BigQuery costs)
+- [OK] Spot instances with aggressive bidding
 
 ### Failure Isolation & Blast Radius
 
@@ -1835,12 +1835,12 @@ Isolation Guarantees:
       - Model artifacts NOT updated (previous version remains)
 
     NOT affected:
-      ✓ Data ingestion pipeline (continues normally)
-      ✓ Data processing pipeline (continues normally)
-      ✓ Streaming inference (uses existing models)
-      ✓ Real-time API (serves existing models)
-      ✓ Dashboard (shows existing models)
-      ✓ Other training jobs (parallel models continue)
+      [OK] Data ingestion pipeline (continues normally)
+      [OK] Data processing pipeline (continues normally)
+      [OK] Streaming inference (uses existing models)
+      [OK] Real-time API (serves existing models)
+      [OK] Dashboard (shows existing models)
+      [OK] Other training jobs (parallel models continue)
 
   Failed Worker Impact:
     affected:
@@ -1848,19 +1848,19 @@ Isolation Guarantees:
       - Training job pauses/retries
 
     NOT affected:
-      ✓ Other workers in same job
-      ✓ Other training jobs
-      ✓ Non-training pipelines
+      [OK] Other workers in same job
+      [OK] Other training jobs
+      [OK] Non-training pipelines
 
   Orchestrator Failure Impact:
     affected:
       - Training DAG runs paused
 
     NOT affected:
-      ✓ Completed training artifacts
-      ✓ Data pipeline (separate orchestrator)
-      ✓ Inference pipeline
-      ✓ Model registry
+      [OK] Completed training artifacts
+      [OK] Data pipeline (separate orchestrator)
+      [OK] Inference pipeline
+      [OK] Model registry
 
 Recovery:
   - Orchestrator auto-restarts within 5 minutes
@@ -1874,23 +1874,23 @@ System Architecture (Failure Isolation):
 ┌─────────────────────────────────────────────────────┐
 │                                                     │
 │  ┌──────────────┐         ┌──────────────┐         │
-│  │ Data         │    ✓    │ Inference    │         │
+│  │ Data         │    [OK]    │ Inference    │         │
 │  │ Pipeline     │ Running │ API          │         │
 │  │ (Running)    │         │ (Running)    │         │
 │  └──────────────┘         └──────────────┘         │
 │                                                     │
 │  ┌──────────────┐                                  │
-│  │ Training     │         ╳ FAILED                 │
+│  │ Training     │         X FAILED                 │
 │  │ Pipeline     │           (Isolated)             │
 │  │ (Failed)     │                                  │
 │  └──────────────┘                                  │
 │                                                     │
 │  Training Failure Impact:                          │
-│  ✓ Data ingestion: UNAFFECTED                     │
-│  ✓ Inference API: UNAFFECTED (uses old models)    │
-│  ✓ Dashboard: UNAFFECTED                          │
-│  ✓ Monitoring: UNAFFECTED                         │
-│  ✗ New models: NOT deployed (old models remain)   │
+│  [OK] Data ingestion: UNAFFECTED                     │
+│  [OK] Inference API: UNAFFECTED (uses old models)    │
+│  [OK] Dashboard: UNAFFECTED                          │
+│  [OK] Monitoring: UNAFFECTED                         │
+│  [FAIL] New models: NOT deployed (old models remain)   │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 ```
@@ -1946,10 +1946,10 @@ Training DAG Branch Independence:
   ▼      ▼                  ▼          ▼          ▼
 ┌────┐ ┌────┐            ┌────┐    ┌────┐    ┌────┐
 │Tire│ │Fuel│   (Failed)│Brake│    │Drive│    │...│
-│Deg │ │Cons│      ╳     │Bias│    │Style│    │   │
+│Deg │ │Cons│      X     │Bias│    │Style│    │   │
 └──┬─┘ └──┬─┘            └──┬─┘    └──┬─┘    └───┘
    │      │                 │         │
-   │      ╳                 │         │
+   │      X                 │         │
    │                        │         │
    └────────┬───────────────┴─────────┘
             ▼
@@ -1996,10 +1996,10 @@ Impact Boundaries:
     recovery: block training, fix data, re-run validation
 
 Prohibited Cascades:
-  ❌ Training failure NEVER stops data ingestion
-  ❌ Training failure NEVER stops inference API
-  ❌ Training failure NEVER deletes previous models
-  ❌ One model failure NEVER blocks other model training
+  [FAIL] Training failure NEVER stops data ingestion
+  [FAIL] Training failure NEVER stops inference API
+  [FAIL] Training failure NEVER deletes previous models
+  [FAIL] One model failure NEVER blocks other model training
 ```
 
 ### Compliance & Auditability
@@ -2166,12 +2166,12 @@ Reproduction Procedure:
     --compare-metrics
 
   # Verifies:
-  # ✓ Git commit SHA matches
-  # ✓ Container image digest matches
-  # ✓ Hyperparameters match
-  # ✓ Input data checksums match
-  # ✓ Output model checksum matches (bit-for-bit)
-  # ✓ Training metrics match (within tolerance)
+  # [OK] Git commit SHA matches
+  # [OK] Container image digest matches
+  # [OK] Hyperparameters match
+  # [OK] Input data checksums match
+  # [OK] Output model checksum matches (bit-for-bit)
+  # [OK] Training metrics match (within tolerance)
 ```
 
 **Training Compliance Retention**:

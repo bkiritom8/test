@@ -36,12 +36,12 @@ def init_airflow_db():
             '--password', 'admin'
         ], check=True)
 
-        logger.info("✅ Airflow database initialized")
+        logger.info("[OK] Airflow database initialized")
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Failed to initialize Airflow database: {e}")
+        logger.error(f"[FAIL] Failed to initialize Airflow database: {e}")
     except FileNotFoundError:
-        logger.warning("⚠️ Airflow not found - skipping Airflow DB initialization")
+        logger.warning("[WARNING] Airflow not found - skipping Airflow DB initialization")
 
 
 def create_directories():
@@ -60,7 +60,7 @@ def create_directories():
     for dir_path in directories:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    logger.info("✅ Directories created")
+    logger.info("[OK] Directories created")
 
 
 def verify_environment():
@@ -77,20 +77,20 @@ def verify_environment():
     # Check Python
     import sys
     if sys.version_info >= (3, 10):
-        logger.info("✅ Python 3.10+ detected")
+        logger.info("[OK] Python 3.10+ detected")
         checks["Python version"] = True
     else:
-        logger.warning(f"⚠️ Python {sys.version_info.major}.{sys.version_info.minor} detected, 3.10+ recommended")
+        logger.warning(f"[WARNING] Python {sys.version_info.major}.{sys.version_info.minor} detected, 3.10+ recommended")
 
     # Check Docker Compose
     import subprocess
     try:
         subprocess.run(['docker-compose', '--version'],
                       capture_output=True, check=True)
-        logger.info("✅ Docker Compose available")
+        logger.info("[OK] Docker Compose available")
         checks["Docker Compose"] = True
     except (subprocess.CalledProcessError, FileNotFoundError):
-        logger.warning("⚠️ Docker Compose not found")
+        logger.warning("[WARNING] Docker Compose not found")
 
     return all(checks.values())
 
@@ -111,7 +111,7 @@ def main():
     # init_airflow_db()
 
     logger.info("=" * 60)
-    logger.info("✅ Initialization complete!")
+    logger.info("[OK] Initialization complete!")
     logger.info("=" * 60)
     logger.info("")
     logger.info("Next steps:")

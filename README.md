@@ -4,15 +4,15 @@ Production-grade F1 race strategy system with full local testing capabilities.
 
 ## Features
 
-✅ **Data Ingestion**: Ergast API + FastF1 telemetry
-✅ **Processing**: Airflow DAGs with operational guarantees
-✅ **Storage**: BigQuery (local mock + production)
-✅ **Messaging**: Pub/Sub event streaming
-✅ **Compute**: Dataflow pipeline orchestration
-✅ **ML Infrastructure**: Distributed training skeleton
-✅ **Security**: IAM/RBAC simulation + HTTPS
-✅ **CI/CD**: GitHub Actions with testing
-✅ **Cross-Platform**: Windows, Linux, macOS support
+- [OK] **Data Ingestion**: Ergast API + FastF1 telemetry
+- [OK] **Processing**: Airflow DAGs with operational guarantees
+- [OK] **Storage**: Cloud SQL PostgreSQL 15 (private VPC, automated backups)
+- [OK] **Messaging**: Pub/Sub event streaming
+- [OK] **Compute**: Dataflow pipeline orchestration
+- [OK] **ML Infrastructure**: Distributed training skeleton
+- [OK] **Security**: IAM/RBAC simulation + HTTPS
+- [OK] **CI/CD**: GitHub Actions with testing
+- [OK] **Cross-Platform**: Windows, Linux, macOS support
 
 ## Quick Start
 
@@ -77,76 +77,76 @@ terraform init
 terraform plan -var-file=dev.tfvars
 terraform apply -var-file=dev.tfvars
 
-# 3. Deploy DAGs
+# 4. Deploy DAGs
 ./scripts/deploy_dags.sh
 
-# 4. Configure secrets
+# 5. Configure secrets
 gcloud secrets create ergast-api-key --data-file=secrets/ergast.key
 ```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Data Sources                         │
-│              Ergast API  │  FastF1                       │
-└────────────┬────────────────────────┬───────────────────┘
-             │                        │
++----------------------------------------------------------+
+|                    Data Sources                          |
+|              Ergast API  |  FastF1                       |
++------------+------------------------+--------------------+
+             |                        |
              v                        v
-┌────────────────────────────────────────────────────────┐
-│              Airflow DAG Orchestrator                   │
-│   ┌──────────────┐  ┌──────────────┐  ┌─────────────┐ │
-│   │  Ingestion   │→ │ Preprocessing │→ │  Training   │ │
-│   │   Tasks      │  │    Tasks      │  │   Tasks     │ │
-│   └──────────────┘  └──────────────┘  └─────────────┘ │
-└────────────┬───────────────────────────────────────────┘
-             │
++----------------------------------------------------------+
+|              Airflow DAG Orchestrator                    |
+|   +---------------+  +---------------+  +------------+  |
+|   |  Ingestion    |  | Preprocessing |  |  Training  |  |
+|   |   Tasks       |  |    Tasks      |  |   Tasks    |  |
+|   +---------------+  +---------------+  +------------+  |
++------------+---------------------------------------------+
+             |
              v
-┌────────────────────────────────────────────────────────┐
-│                 Message Bus (Pub/Sub)                   │
-└────────────┬───────────────────────────────────────────┘
-             │
++----------------------------------------------------------+
+|                 Message Bus (Pub/Sub)                    |
++------------+---------------------------------------------+
+             |
              v
-┌────────────────────────────────────────────────────────┐
-│              Dataflow Processing                        │
-│         (Validation, Enrichment, Routing)               │
-└────────────┬───────────────────────────────────────────┘
-             │
++----------------------------------------------------------+
+|              Dataflow Processing                         |
+|         (Validation, Enrichment, Routing)                |
++------------+---------------------------------------------+
+             |
              v
-┌────────────────────────────────────────────────────────┐
-│                 Data Warehouse                          │
-│          BigQuery (Partitioned, Clustered)              │
-└────────────┬───────────────────────────────────────────┘
-             │
++----------------------------------------------------------+
+|                 Data Store                               |
+|          Cloud SQL PostgreSQL 15 (Private VPC)           |
++------------+---------------------------------------------+
+             |
              v
-┌────────────────────────────────────────────────────────┐
-│         Distributed ML Training Infrastructure          │
-│     (Ray Cluster, Model Registry, Feature Store)        │
-└─────────────────────────────────────────────────────────┘
++----------------------------------------------------------+
+|         Distributed ML Training Infrastructure           |
+|     (Ray Cluster, Model Registry, Feature Store)         |
++----------------------------------------------------------+
 ```
 
 ## Directory Structure
 
 ```
 test/
-├── airflow/
-│   ├── dags/              # Airflow DAG definitions
-│   ├── plugins/           # Custom Airflow plugins
-│   └── config/            # Airflow configuration
-├── src/
-│   ├── ingestion/         # Data ingestion modules
-│   ├── preprocessing/     # Data cleaning and feature engineering
-│   ├── dataflow/          # Apache Beam pipelines
-│   ├── ml/                # ML training infrastructure
-│   ├── api/               # FastAPI service
-│   ├── common/            # Shared utilities
-│   └── mocks/             # Mock GCP services for local dev
-├── terraform/             # Infrastructure as Code
-├── docker/                # Dockerfiles for all services
-├── tests/                 # Pytest test suite
-├── scripts/               # Utility scripts
-├── .github/workflows/     # CI/CD pipelines
-└── docs/                  # Technical documentation
++-- airflow/
+|   +-- dags/              # Airflow DAG definitions
+|   +-- plugins/           # Custom Airflow plugins
+|   +-- config/            # Airflow configuration
++-- src/
+|   +-- ingestion/         # Data ingestion modules
+|   +-- preprocessing/     # Data cleaning and feature engineering
+|   +-- dataflow/          # Apache Beam pipelines
+|   +-- ml/                # ML training infrastructure
+|   +-- api/               # FastAPI service
+|   +-- common/            # Shared utilities
+|   +-- mocks/             # Mock GCP services for local dev
++-- terraform/             # Infrastructure as Code
++-- docker/                # Dockerfiles for all services
++-- tests/                 # Pytest test suite
++-- scripts/               # Utility scripts
++-- .github/workflows/     # CI/CD pipelines
++-- docs/                  # Technical documentation
 ```
 
 ## Testing
@@ -170,7 +170,7 @@ pytest tests/integration/ -v --docker
 locust -f tests/load/locustfile.py
 ```
 
-## Monitoring & Observability
+## Monitoring and Observability
 
 ### Metrics Tracked
 - DAG run duration, success/failure rates
@@ -194,8 +194,8 @@ locust -f tests/load/locustfile.py
 | End-to-End Latency | <5s | - |
 | System Uptime | 99.5% | - |
 | Cost per Prediction | <$0.001 | - |
-| Podium Accuracy | ≥70% | - |
-| Winner Accuracy | ≥65% | - |
+| Podium Accuracy | >=70% | - |
+| Winner Accuracy | >=65% | - |
 
 ## License
 
@@ -203,6 +203,6 @@ MIT License
 
 ---
 
-**Status**: Initial Development
-**Last Updated**: 2026-02-14
-**Branch**: `claude/f1-optimizer-pipeline-KC0J8`
+**Status**: Terraform infrastructure complete - Cloud SQL provisioned, IAM bindings in place
+**Last Updated**: 2026-02-18
+**Branch**: `main`

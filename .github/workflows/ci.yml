@@ -236,9 +236,9 @@ jobs:
                 "${{ needs.test.result }}" == "success" && \
                 "${{ needs.docker-build.result }}" == "success" && \
                 "${{ needs.terraform-validate.result }}" == "success" ]]; then
-            echo "✅ All checks passed!"
+            echo "[OK] All checks passed!"
             exit 0
           else
-            echo "❌ Some checks failed"
+            echo "[FAIL] Some checks failed"
             exit 1
           fi

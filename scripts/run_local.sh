@@ -25,18 +25,18 @@ done
 PASS=0; FAIL=0
 declare -a RESULTS=()
 
-step()    { echo -e "\n${BLUE}${BOLD}▶ $*${RESET}"; }
-ok()      { echo -e "${GREEN}✔ $*${RESET}"; }
-warn()    { echo -e "${YELLOW}⚠ $*${RESET}"; }
-fail()    { echo -e "${RED}✖ $*${RESET}"; }
+step()    { echo -e "\n${BLUE}${BOLD}> $*${RESET}"; }
+ok()      { echo -e "${GREEN}[OK] $*${RESET}"; }
+warn()    { echo -e "${YELLOW}[WARNING] $*${RESET}"; }
+fail()    { echo -e "${RED}[FAIL] $*${RESET}"; }
 
 record() {
   local label="$1" status="$2"
   if [[ "$status" == "ok" ]]; then
-    RESULTS+=("${GREEN}  ✔ ${label}${RESET}")
+    RESULTS+=("${GREEN}  [OK] ${label}${RESET}")
     (( PASS++ )) || true
   else
-    RESULTS+=("${RED}  ✖ ${label}${RESET}")
+    RESULTS+=("${RED}  [FAIL] ${label}${RESET}")
     (( FAIL++ )) || true
   fi
 }

@@ -127,9 +127,9 @@ mae = mean_absolute_error(y_true, y_pred)
 **Target**: MAE < 50ms
 
 **Success Criteria**:
-- MAE < 50ms: ✅ Pass
-- MAE 50-100ms: ⚠️ Warning (acceptable but monitor)
-- MAE > 100ms: ❌ Fail (retrain required)
+- MAE < 50ms: [OK] Pass
+- MAE 50-100ms: [WARNING] Warning (acceptable but monitor)
+- MAE > 100ms: [FAIL] Fail (retrain required)
 
 **Breakdown by Compound**:
 ```python
@@ -507,13 +507,13 @@ Cost per prediction: $0.002 (needs optimization)
 
 **Project is considered successful when**:
 
-✅ All driver profile metrics meet targets (r >0.7, <5% error, <50ms MAE)
-✅ All 4 ML models meet accuracy targets
-✅ Podium accuracy ≥70% and winner accuracy ≥65% on test set
-✅ API P99 latency <500ms with 99.5% uptime
-✅ System operates within $250/month budget
-✅ All monitoring and alerting configured
-✅ Code coverage ≥80% with passing integration tests
+[OK] All driver profile metrics meet targets (r >0.7, <5% error, <50ms MAE)
+[OK] All 4 ML models meet accuracy targets
+[OK] Podium accuracy ≥70% and winner accuracy ≥65% on test set
+[OK] API P99 latency <500ms with 99.5% uptime
+[OK] System operates within $250/month budget
+[OK] All monitoring and alerting configured
+[OK] Code coverage ≥80% with passing integration tests
 
 ---
 
