@@ -15,6 +15,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 
   backend "gcs" {
@@ -53,7 +57,8 @@ resource "google_project_service" "required_apis" {
     "monitoring.googleapis.com",
     "secretmanager.googleapis.com",
     "servicenetworking.googleapis.com",
-    "artifactregistry.googleapis.com"
+    "artifactregistry.googleapis.com",
+    "cloudbuild.googleapis.com"
   ])
 
   service            = each.value
@@ -329,6 +334,36 @@ resource "google_artifact_registry_repository" "docker_repo" {
   depends_on = [google_project_service.required_apis]
 }
 
+# Lookup project metadata (used for Cloud Build service account)
+data "google_project" "project" {}
+
+# Cloud Build trigger — fires on every push to the pipeline branch
+resource "google_cloudbuild_trigger" "api_build" {
+  name    = "f1-api-docker-build"
+  project = var.project_id
+
+  github {
+    owner = "bkiritom8"
+    name  = "F1-Strategy-Optimizer"
+    push {
+      branch = "^pipeline$"
+    }
+  }
+
+  filename = "cloudbuild.yaml"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Grant Cloud Build SA permission to push images to Artifact Registry
+resource "google_project_iam_member" "cloudbuild_ar_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+
+  depends_on = [google_project_service.required_apis]
+}
+
 # Monitoring and Logging
 resource "google_monitoring_notification_channel" "email" {
   display_name = "F1 Optimizer Email Alerts"
@@ -412,6 +447,23 @@ resource "google_cloud_run_v2_job" "f1_data_ingestion" {
     google_project_service.required_apis,
     google_sql_database_instance.f1_db,
     google_secret_manager_secret_version.db_password,
+  ]
+}
+
+# Trigger data ingestion job once after infrastructure is ready.
+# Re-runs only when the Cloud SQL instance name changes, not on every apply.
+resource "null_resource" "trigger_data_ingestion" {
+  triggers = {
+    db_instance_name = google_sql_database_instance.f1_db.name
+  }
+
+  provisioner "local-exec" {
+    command = "gcloud run jobs execute f1-data-ingestion --region=${var.region} --project=${var.project_id}"
+  }
+
+  depends_on = [
+    google_cloud_run_v2_job.f1_data_ingestion,
+    google_sql_database_instance.f1_db,
   ]
 }
 
