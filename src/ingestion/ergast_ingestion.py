@@ -48,6 +48,7 @@ def _get(url: str, params: Optional[dict] = None) -> dict:
                 time.sleep(_RATE_LIMIT_DELAY * (attempt + 2))
             else:
                 raise
+    raise RuntimeError(f"_get: exhausted all retries for {url}")
 
 
 def _paginate(url: str, table_key: str, inner_key: str) -> list[dict]:

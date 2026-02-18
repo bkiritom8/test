@@ -113,7 +113,7 @@ class ManagedConnection:
         self._conn = get_pool().get()
         return self._conn
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         if self._conn is not None:
             if exc_type is not None:
                 try:

@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 FASTF1_CACHE = os.environ.get("FASTF1_CACHE", "/tmp/fastf1_cache")
 START_YEAR = 2018
 _SESSION_DELAY = 1.0  # seconds between session loads
+_SESSION_TYPES = ["Q", "R"]  # Qualifying + Race only (skips FP1/FP2/FP3/Sprint)
 
 
 def _setup_cache() -> None:
@@ -352,19 +353,21 @@ def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) 
                     continue
                 event_name = event.get("EventName", "")
                 logger.info("  Round %d: %s", round_num, event_name)
-                if season >= 2025:
-                    try:
-                        ingest_session(conn, season, round_num, "R")
-                    except Exception as exc:
-                        logger.info(
-                            "Round %d/%d not yet available, skipping: %s",
-                            season,
-                            round_num,
-                            exc,
-                        )
-                else:
-                    ingest_session(conn, season, round_num, "R")
-                time.sleep(_SESSION_DELAY)
+                for session_type in _SESSION_TYPES:
+                    if season >= 2025:
+                        try:
+                            ingest_session(conn, season, round_num, session_type)
+                        except Exception as exc:
+                            logger.info(
+                                "Session %d/%d/%s not yet available, skipping: %s",
+                                season,
+                                round_num,
+                                session_type,
+                                exc,
+                            )
+                    else:
+                        ingest_session(conn, season, round_num, session_type)
+                    time.sleep(_SESSION_DELAY)
 
         compute_driver_profiles(conn)
 

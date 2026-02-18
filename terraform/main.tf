@@ -395,7 +395,9 @@ resource "google_cloud_run_v2_job" "f1_data_ingestion" {
       timeout = "3600s"
 
       containers {
-        image = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/api:latest"
+        image   = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/api:latest"
+        command = ["/bin/bash"]
+        args    = ["/app/scripts/run_ingestion.sh"]
 
         resources {
           limits = {
