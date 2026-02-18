@@ -318,6 +318,29 @@ resource "google_cloud_run_service_iam_member" "api_sa_run_invoker" {
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.api_sa.email}"
 }
+# Allow api_sa to trigger the f1-data-ingestion Cloud Run Job
+resource "google_cloud_run_v2_job_iam_member" "api_sa_ingestion_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.f1_data_ingestion.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# Allow api_sa to create/delete alert policies and custom metric descriptors
+resource "google_project_iam_member" "api_sa_monitoring_admin" {
+  project = var.project_id
+  role    = "roles/monitoring.admin"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# Allow api_sa to read Cloud Logging entries (for last-20-lines on failure)
+resource "google_project_iam_member" "api_sa_logging_viewer" {
+  project = var.project_id
+  role    = "roles/logging.viewer"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
 resource "google_project_iam_member" "compute_secret_accessor" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
@@ -456,6 +479,71 @@ resource "null_resource" "trigger_data_ingestion" {
   depends_on = [
     google_cloud_run_v2_job.f1_data_ingestion,
     google_sql_database_instance.f1_db,
+  ]
+}
+
+# Cloud Run Job — ingestion monitor
+# Triggers f1-data-ingestion, polls until complete, and sends email
+# notifications via Cloud Monitoring notification channels.
+# Run manually: gcloud run jobs execute f1-ingestion-monitor --region=us-central1 --project=f1optimizer
+resource "google_cloud_run_v2_job" "f1_ingestion_monitor" {
+  name     = "f1-ingestion-monitor"
+  location = var.region
+  labels   = local.common_labels
+
+  template {
+    template {
+      timeout         = "14400s" # 4 hours — enough for full FastF1 ingestion
+      service_account = google_service_account.api_sa.email
+
+      containers {
+        image   = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/api:latest"
+        command = ["python"]
+        args    = ["/app/scripts/monitor_ingestion.py"]
+
+        resources {
+          limits = {
+            memory = "1Gi"
+            cpu    = "1"
+          }
+        }
+
+        env {
+          name  = "DB_HOST"
+          value = google_sql_database_instance.f1_db.private_ip_address
+        }
+        env {
+          name  = "DB_NAME"
+          value = var.db_name
+        }
+        env {
+          name  = "DB_PORT"
+          value = "5432"
+        }
+        env {
+          name  = "DB_USER"
+          value = "f1_api"
+        }
+        env {
+          name = "DB_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.db_password.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_cloud_run_v2_job.f1_data_ingestion,
+    google_cloud_run_v2_job_iam_member.api_sa_ingestion_invoker,
+    google_project_iam_member.api_sa_monitoring_admin,
+    google_project_iam_member.api_sa_logging_viewer,
+    google_secret_manager_secret_version.db_password,
   ]
 }
 
