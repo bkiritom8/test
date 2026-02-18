@@ -11,8 +11,11 @@ Features:
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict
+
+import psycopg2
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -287,6 +290,42 @@ def ingest_fastf1_events(**context):
         raise AirflowException(f"FastF1 events ingestion failed: {e}")
 
 
+def verify_races_written(**context):
+    """Verify race data was written to Cloud SQL after ingestion"""
+    host = os.environ["DB_HOST"]
+    dbname = os.environ["DB_NAME"]
+    port = int(os.environ.get("DB_PORT", 5432))
+    user = os.environ["DB_USER"]
+    password = os.environ["DB_PASSWORD"]
+
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            dbname=dbname,
+            port=port,
+            user=user,
+            password=password,
+            connect_timeout=10,
+        )
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM races")
+                count = cur.fetchone()[0]
+        conn.close()
+    except psycopg2.Error as e:
+        logger.error(f"Cloud SQL connection/query failed: {e}")
+        raise AirflowException(f"Cloud SQL verification failed: {e}")
+
+    logger.info(f"Cloud SQL races table row count: {count}")
+
+    if count == 0:
+        raise AirflowException(
+            "Verification failed: races table is empty after ingestion"
+        )
+
+    return {"races_count": count}
+
+
 def check_budget_threshold(**context):
     """Check if budget threshold exceeded"""
     global metrics
@@ -398,6 +437,14 @@ with dag:
             dag=dag
         )
 
+    # Verify data was written to Cloud SQL
+    verify_cloud_sql = PythonOperator(
+        task_id='verify_cloud_sql_races',
+        python_callable=verify_races_written,
+        provide_context=True,
+        dag=dag
+    )
+
     # Budget check
     check_budget = PythonOperator(
         task_id='check_budget_threshold',
@@ -423,4 +470,4 @@ with dag:
     )
 
     # Define DAG structure
-    start >> init_metrics >> [ergast_group, fastf1_group] >> check_budget >> publish >> end
+    start >> init_metrics >> [ergast_group, fastf1_group] >> verify_cloud_sql >> check_budget >> publish >> end
