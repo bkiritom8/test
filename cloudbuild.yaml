@@ -1,5 +1,6 @@
 steps:
   - name: "gcr.io/cloud-builders/docker"
+    id: "build-api"
     args:
       - "build"
       - "--platform"
@@ -10,5 +11,18 @@ steps:
       - "docker/Dockerfile.api"
       - "."
 
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-ingestion"
+    args:
+      - "build"
+      - "--platform"
+      - "linux/amd64"
+      - "-t"
+      - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ingestion:latest"
+      - "-f"
+      - "docker/Dockerfile.ingestion"
+      - "."
+
 images:
   - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/api:latest"
+  - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ingestion:latest"
