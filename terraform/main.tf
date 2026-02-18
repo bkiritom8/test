@@ -305,6 +305,11 @@ resource "google_project_iam_member" "api_cloudsql_client" {
   role    = "roles/cloudsql.client"
   member  = "serviceAccount:${google_service_account.api_sa.email}"
 }
+resource "google_project_iam_member" "compute_secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:694267183904-compute@developer.gserviceaccount.com"
+}
 
 # Artifact Registry — Docker image repository
 resource "google_artifact_registry_repository" "docker_repo" {
@@ -351,6 +356,55 @@ resource "google_monitoring_alert_policy" "api_error_rate" {
   alert_strategy {
     auto_close = "1800s"
   }
+}
+
+# Cloud Run v2 Job — data ingestion (Ergast + FastF1)
+resource "google_cloud_run_v2_job" "f1_data_ingestion" {
+  name     = "f1-data-ingestion"
+  location = var.region
+  labels   = local.common_labels
+
+  template {
+    template {
+      timeout = "3600s"
+
+      containers {
+        image = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/api:latest"
+
+        env {
+          name  = "DB_HOST"
+          value = google_sql_database_instance.f1_db.private_ip_address
+        }
+        env {
+          name  = "DB_NAME"
+          value = var.db_name
+        }
+        env {
+          name  = "DB_PORT"
+          value = "5432"
+        }
+        env {
+          name  = "DB_USER"
+          value = "f1_api"
+        }
+        env {
+          name = "DB_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.db_password.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_sql_database_instance.f1_db,
+    google_secret_manager_secret_version.db_password,
+  ]
 }
 
 # Outputs

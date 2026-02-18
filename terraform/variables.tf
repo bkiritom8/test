@@ -52,3 +52,15 @@ variable "budget_amount" {
   type        = number
   default     = 200
 }
+
+variable "db_tier" {
+  description = "Cloud SQL instance tier"
+  type        = string
+  default     = "db-f1-micro"
+}
+
+variable "db_name" {
+  description = "PostgreSQL database name for the ingestion job"
+  type        = string
+  default     = "f1_strategy"
+}

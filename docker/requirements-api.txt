@@ -23,8 +23,14 @@ opentelemetry-instrumentation-fastapi==0.43b0
 
 # Security
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
 python-multipart==0.0.6
+
+# Database
+pg8000==1.31.2
+
+# F1 Data
+fastf1==3.3.9
 
 # Utilities
 python-dotenv==1.0.0

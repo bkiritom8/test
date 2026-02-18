@@ -198,6 +198,7 @@ terraform.tfstate
 terraform.tfstate.backup
 *.tfplan
 crash.log
+*.tfvars
 
 # PyPI configuration file
 .pypirc

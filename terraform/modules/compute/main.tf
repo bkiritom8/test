@@ -17,6 +17,10 @@ resource "google_cloud_run_v2_service" "api" {
     containers {
       image = var.container_image
 
+      ports {
+        container_port = 8000
+      }
+
       resources {
         limits = {
           memory = var.memory

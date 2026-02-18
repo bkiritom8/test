@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional, Set
 
+import bcrypt
 from pydantic import BaseModel
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,9 +20,6 @@ logger = logging.getLogger(__name__)
 SECRET_KEY = "f1-strategy-optimizer-secret-key-change-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class Role(str, Enum):
@@ -165,11 +162,11 @@ class IAMSimulator:
 
     def _hash_password(self, password: str) -> str:
         """Hash password"""
-        return pwd_context.hash(password)
+        return bcrypt.hashpw(password.encode('utf-8')[:72], bcrypt.gensalt()).decode('utf-8')
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify password"""
-        return pwd_context.verify(plain_password, hashed_password)
+        return bcrypt.checkpw(plain_password.encode('utf-8')[:72], hashed_password.encode('utf-8'))
 
     def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """Authenticate user with username and password"""

@@ -1,15 +1,19 @@
-FROM python:3.10-slim
+FROM --platform=linux/amd64 python:3.10-slim
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    git \
+    gcc \
+    g++ \
+    libhdf5-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements-api.txt /tmp/
+COPY docker/requirements-api.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
 
 # Copy application code
@@ -26,4 +30,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
   CMD curl --fail http://localhost:8000/health || exit 1
 
 # Run the service
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
