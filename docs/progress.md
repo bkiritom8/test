@@ -146,6 +146,44 @@ Added Cloud Build CI/CD trigger, auto data ingestion null_resource, formatting c
 
 ---
 
+## Session 2026-02-18 - Jolpica Migration, Vertex AI Infra, Season Range Extension
+
+**Date**: 2026-02-18
+**Duration**: ~1.5 hours
+**Participants**: Claude Code
+
+**Summary**:
+Migrated data ingestion from the deprecated Ergast API to Jolpica, extended season coverage to 2026, added Vertex AI training infrastructure to Terraform, and set Cloud Run Job resource limits.
+
+**Completed**:
+- [x] Migrated `src/ingestion/ergast_ingestion.py`: base URL → `https://api.jolpi.ca/ergast/f1`; trailing `/` added to all 10 endpoint URLs (Jolpica requirement); `ingest_races` wrapped in try/except to skip incomplete/future seasons; `--end-season` default → 2026
+- [x] Extended `src/ingestion/fastf1_ingestion.py` to 2026: `--end-year` default → 2026; seasons >= 2025 wrapped in explicit try/except logging missing rounds at INFO level (not WARNING)
+- [x] Added Vertex AI training infra to `terraform/main.tf`:
+  - `google_storage_bucket.training` (`f1optimizer-training`, versioned)
+  - `google_service_account.training_sa` (`f1-training-dev`)
+  - `google_project_iam_member.training_sa_custom_code` (`roles/aiplatform.customCodeServiceAgent`)
+  - `google_project_iam_member.training_sa_storage_admin` (`roles/storage.objectAdmin`)
+  - `google_project_iam_member.api_sa_aiplatform_user` (`roles/aiplatform.user` on `api_sa`)
+  - `service_accounts` output updated to include `training` key
+- [x] Added resource limits to `google_cloud_run_v2_job.f1_data_ingestion`: `memory = "4Gi"`, `cpu = "2"`
+- [x] Updated CLAUDE.md: Jolpica references, 1950-2026 data range, Vertex AI infra details, component status, known gaps, next steps
+- [x] Committed `3377641` and pushed to `origin/main`
+
+**Key Decisions**:
+1. **Jolpica over Ergast**: Ergast API is deprecated; Jolpica is the maintained community mirror with identical response schema but requires trailing slashes on all endpoints
+2. **Vertex AI infra only, no job resource**: Training jobs will be submitted programmatically by teammates; Terraform provisions the SA, bucket, and IAM only — no `google_vertex_ai_custom_job` resource to avoid hardcoding model config
+3. **Season >= 2025 logged at INFO**: Missing rounds in 2025/2026 are expected (race hasn't happened), not errors — INFO avoids false alarm noise in Cloud Logging
+
+**Known Gap Remaining**:
+- Data ingestion DAG (`f1_data_ingestion.py`) still does not write to Cloud SQL — remains the top priority
+
+**Next Steps**:
+1. Add Cloud SQL write step to `airflow/dags/f1_data_ingestion.py`
+2. Write training container code and Vertex AI job submission scripts using `f1-training-dev` SA
+3. Begin driver profile extraction and feature engineering
+
+---
+
 ## Session Template (Future Entries)
 
 **Date**: YYYY-MM-DD

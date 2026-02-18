@@ -1,5 +1,5 @@
 """
-Ergast API client for historical F1 data (1950-2024).
+Jolpica F1 API client for historical F1 data (1950-2026).
 Implements retry logic, rate limiting, and circuit breaker pattern.
 """
 
@@ -137,7 +137,7 @@ class CircuitBreaker:
 class ErgastClient:
     """Ergast API client with retry logic and rate limiting"""
 
-    BASE_URL = "https://ergast.com/api/f1/"
+    BASE_URL = "https://api.jolpi.ca/ergast/f1/"
     RATE_LIMIT_DELAY = 0.5  # 2 requests per second max
 
     def __init__(
@@ -206,10 +206,10 @@ class ErgastClient:
             logger.error(f"Request error for {url}: {e}")
             raise
 
-    def get_seasons(self, start_year: int = 1950, end_year: int = 2024) -> List[int]:
+    def get_seasons(self, start_year: int = 1950, end_year: int = 2026) -> List[int]:
         """Get list of F1 seasons"""
         try:
-            response = self._make_request("seasons.json")
+            response = self._make_request("seasons.json/")
             seasons_data = response["MRData"]["SeasonTable"]["Seasons"]
 
             seasons = [
@@ -230,7 +230,7 @@ class ErgastClient:
     def get_races(self, year: int) -> List[Race]:
         """Get all races for a season"""
         try:
-            endpoint = f"{year}.json"
+            endpoint = f"{year}.json/"
             response = self._make_request(endpoint)
 
             races_data = response["MRData"]["RaceTable"]["Races"]
@@ -260,7 +260,7 @@ class ErgastClient:
     def get_drivers(self, year: Optional[int] = None) -> List[Driver]:
         """Get all drivers (optionally for a specific year)"""
         try:
-            endpoint = f"{year}/drivers.json" if year else "drivers.json"
+            endpoint = f"{year}/drivers.json/" if year else "drivers.json/"
             response = self._make_request(endpoint)
 
             drivers_data = response["MRData"]["DriverTable"]["Drivers"]
@@ -291,7 +291,7 @@ class ErgastClient:
     def get_results(self, year: int, round_num: int) -> List[Result]:
         """Get race results for a specific race"""
         try:
-            endpoint = f"{year}/{round_num}/results.json"
+            endpoint = f"{year}/{round_num}/results.json/"
             response = self._make_request(endpoint)
 
             races_data = response["MRData"]["RaceTable"]["Races"]
@@ -337,9 +337,9 @@ class ErgastClient:
         """Get lap times for a specific race"""
         try:
             if lap:
-                endpoint = f"{year}/{round_num}/laps/{lap}.json"
+                endpoint = f"{year}/{round_num}/laps/{lap}.json/"
             else:
-                endpoint = f"{year}/{round_num}/laps.json"
+                endpoint = f"{year}/{round_num}/laps.json/"
 
             response = self._make_request(endpoint)
 
@@ -377,7 +377,7 @@ class ErgastClient:
     ) -> List[Dict[str, Any]]:
         """Get championship standings (drivers or constructors)"""
         try:
-            endpoint = f"{year}/{standings_type}Standings.json"
+            endpoint = f"{year}/{standings_type}Standings.json/"
             response = self._make_request(endpoint)
 
             standings_data = response["MRData"]["StandingsTable"]["StandingsLists"]
@@ -409,12 +409,12 @@ if __name__ == "__main__":
     client = ErgastClient()
 
     # Get recent seasons
-    seasons = client.get_seasons(2020, 2024)
+    seasons = client.get_seasons(2020, 2026)
     print(f"Seasons: {seasons}")
 
-    # Get races for 2024
-    races_2024 = client.get_races(2024)
-    print(f"2024 Races: {len(races_2024)}")
+    # Get races for 2025
+    races_2025 = client.get_races(2025)
+    print(f"2025 Races: {len(races_2025)}")
 
     # Get all drivers
     drivers = client.get_drivers()
