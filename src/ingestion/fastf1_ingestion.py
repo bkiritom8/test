@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 
 FASTF1_CACHE = os.environ.get("FASTF1_CACHE", "/tmp/fastf1_cache")
 START_YEAR = 2018
-_SESSION_DELAY = 1.0  # seconds between session loads
-_SESSION_TYPES = ["Q", "R"]  # Qualifying + Race only (skips FP1/FP2/FP3/Sprint)
+_SESSION_DELAY = 5.0          # seconds between every session download
+_LONG_SLEEP_EVERY = 10        # sessions between long pauses
+_LONG_SLEEP_SECONDS = 30      # seconds to pause every _LONG_SLEEP_EVERY sessions
+_SESSION_TYPES = ["Q", "R"]   # Qualifying + Race only (skips FP1/FP2/FP3/Sprint)
 
 
 def _setup_cache() -> None:
@@ -338,6 +340,7 @@ def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) 
     _setup_cache()
     logger.info("Starting FastF1 ingestion %d–%d", start_year, current_year)
 
+    session_count = 0
     with ManagedConnection() as conn:
         for season in range(start_year, current_year + 1):
             logger.info("Season %d…", season)
@@ -367,7 +370,16 @@ def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) 
                             )
                     else:
                         ingest_session(conn, season, round_num, session_type)
-                    time.sleep(_SESSION_DELAY)
+                    session_count += 1
+                    if session_count % _LONG_SLEEP_EVERY == 0:
+                        logger.info(
+                            "Rate limit pause: sleeping %ds after %d sessions",
+                            _LONG_SLEEP_SECONDS,
+                            session_count,
+                        )
+                        time.sleep(_LONG_SLEEP_SECONDS)
+                    else:
+                        time.sleep(_SESSION_DELAY)
 
         compute_driver_profiles(conn)
 

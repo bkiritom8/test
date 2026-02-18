@@ -56,7 +56,7 @@ else
 fi
 
 # ---- 3. FastF1 ingestion (Q + R sessions, 2018-2026) ----------------------
-log "Step 3/3: Starting FastF1 ingestion (Qualifying + Race, 2018-2026)..."
+log "Step 3/3: Starting FastF1 ingestion (Qualifying + Race, 2018-2026, 5s delay/session, 30s pause every 10 sessions)..."
 python -m src.ingestion.fastf1_ingestion 2>&1 | tee -a "$LOG_FILE"
 FASTF1_EXIT=${PIPESTATUS[0]}
 if [ "$FASTF1_EXIT" -ne 0 ]; then
