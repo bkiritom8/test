@@ -337,23 +337,6 @@ resource "google_artifact_registry_repository" "docker_repo" {
 # Lookup project metadata (used for Cloud Build service account)
 data "google_project" "project" {}
 
-# Cloud Build trigger — fires on every push to the pipeline branch
-resource "google_cloudbuild_trigger" "api_build" {
-  name    = "f1-api-docker-build"
-  project = var.project_id
-
-  github {
-    owner = "bkiritom8"
-    name  = "F1-Strategy-Optimizer"
-    push {
-      branch = "^pipeline$"
-    }
-  }
-
-  filename = "cloudbuild.yaml"
-
-  depends_on = [google_project_service.required_apis]
-}
 
 # Grant Cloud Build SA permission to push images to Artifact Registry
 resource "google_project_iam_member" "cloudbuild_ar_writer" {
@@ -414,6 +397,13 @@ resource "google_cloud_run_v2_job" "f1_data_ingestion" {
       containers {
         image = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/api:latest"
 
+        resources {
+          limits = {
+            memory = "4Gi"
+            cpu    = "2"
+          }
+        }
+
         env {
           name  = "DB_HOST"
           value = google_sql_database_instance.f1_db.private_ip_address
@@ -467,6 +457,46 @@ resource "null_resource" "trigger_data_ingestion" {
   ]
 }
 
+# Vertex AI Training Infrastructure
+resource "google_storage_bucket" "training" {
+  name          = "${var.project_id}-training"
+  location      = var.region
+  force_destroy = false
+
+  uniform_bucket_level_access = true
+  versioning {
+    enabled = true
+  }
+
+  labels = local.common_labels
+
+  depends_on = [google_project_service.required_apis]
+}
+
+resource "google_service_account" "training_sa" {
+  account_id   = "f1-training-dev"
+  display_name = "F1 Training Service Account (dev)"
+  description  = "Service account for running Vertex AI custom training jobs"
+}
+
+resource "google_project_iam_member" "api_sa_aiplatform_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+resource "google_project_iam_member" "training_sa_custom_code" {
+  project = var.project_id
+  role    = "roles/aiplatform.customCodeServiceAgent"
+  member  = "serviceAccount:${google_service_account.training_sa.email}"
+}
+
+resource "google_project_iam_member" "training_sa_storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.training_sa.email}"
+}
+
 # Outputs
 output "cloud_sql_instance_connection_name" {
   description = "Cloud SQL instance connection name"
@@ -489,5 +519,6 @@ output "service_accounts" {
     airflow  = google_service_account.airflow_sa.email
     dataflow = google_service_account.dataflow_sa.email
     api      = google_service_account.api_sa.email
+    training = google_service_account.training_sa.email
   }
 }
