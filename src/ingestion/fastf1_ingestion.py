@@ -29,10 +29,10 @@ logger = logging.getLogger(__name__)
 
 FASTF1_CACHE = os.environ.get("FASTF1_CACHE", "/tmp/fastf1_cache")
 START_YEAR = 2018
-_SESSION_DELAY = 5.0          # seconds between every session download
-_LONG_SLEEP_EVERY = 10        # sessions between long pauses
-_LONG_SLEEP_SECONDS = 30      # seconds to pause every _LONG_SLEEP_EVERY sessions
-_SESSION_TYPES = ["Q", "R"]   # Qualifying + Race only (skips FP1/FP2/FP3/Sprint)
+_SESSION_DELAY = 5.0  # seconds between every session download
+_LONG_SLEEP_EVERY = 10  # sessions between long pauses
+_LONG_SLEEP_SECONDS = 30  # seconds to pause every _LONG_SLEEP_EVERY sessions
+_SESSION_TYPES = ["Q", "R"]  # Qualifying + Race only (skips FP1/FP2/FP3/Sprint)
 
 
 def _setup_cache() -> None:
