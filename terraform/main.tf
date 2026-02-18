@@ -305,6 +305,14 @@ resource "google_project_iam_member" "api_cloudsql_client" {
   role    = "roles/cloudsql.client"
   member  = "serviceAccount:${google_service_account.api_sa.email}"
 }
+
+resource "google_cloud_run_service_iam_member" "api_sa_run_invoker" {
+  project  = var.project_id
+  location = var.region
+  service  = "f1-strategy-api-dev"
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.api_sa.email}"
+}
 resource "google_project_iam_member" "compute_secret_accessor" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"

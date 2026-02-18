@@ -21,7 +21,6 @@ import time
 from typing import Optional
 
 import fastf1
-import numpy as np
 import pandas as pd
 
 from src.database.connection import ManagedConnection
