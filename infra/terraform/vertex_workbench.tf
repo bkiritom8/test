@@ -6,6 +6,11 @@
 
 # ── Workbench instance ────────────────────────────────────────────────────────
 
+resource "google_project_service" "notebooks_api" {
+  service            = "notebooks.googleapis.com"
+  disable_on_destroy = false
+}
+
 resource "google_workbench_instance" "f1_ml_workbench" {
   name     = "f1-ml-workbench"
   location = "${var.region}-a" # zone required for Workbench
@@ -30,7 +35,7 @@ resource "google_workbench_instance" "f1_ml_workbench" {
     }
 
     boot_disk {
-      disk_size_gb = 100
+      disk_size_gb = 150
       disk_type    = "PD_SSD"
     }
 

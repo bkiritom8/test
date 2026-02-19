@@ -123,9 +123,7 @@ def resolve_execution_name(session: requests.Session, creds, op_name: str) -> st
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def poll_until_complete(
-    session: requests.Session, creds, execution_name: str
-) -> tuple:
+def poll_until_complete(session: requests.Session, creds, execution_name: str) -> tuple:
     """Poll execution every POLL_INTERVAL_SECS until a terminal state is reached.
 
     Returns (status, exec_data) where status is 'SUCCEEDED' or 'FAILED'.
@@ -212,9 +210,7 @@ def list_channel_ids_for_emails(
 ) -> list:
     """Return notification channel resource names matching the target email addresses."""
     refresh(session, creds)
-    resp = session.get(
-        f"{MONITORING_BASE}/projects/{PROJECT}/notificationChannels"
-    )
+    resp = session.get(f"{MONITORING_BASE}/projects/{PROJECT}/notificationChannels")
     resp.raise_for_status()
     channels = resp.json().get("notificationChannels", [])
 
@@ -348,8 +344,7 @@ def send_via_alert_policy(
                     "displayName": "F1 ingestion notification trigger",
                     "conditionThreshold": {
                         "filter": (
-                            f'metric.type="{metric_type}"'
-                            ' AND resource.type="global"'
+                            f'metric.type="{metric_type}"' ' AND resource.type="global"'
                         ),
                         "comparison": "COMPARISON_GT",
                         "thresholdValue": 0,

@@ -58,9 +58,9 @@ WORKERS = [
     ("f1-jolpica-worker-2", "f1-jolpica-worker", "jolpica", 1980, 1999),
     ("f1-jolpica-worker-3", "f1-jolpica-worker", "jolpica", 2000, 2012),
     ("f1-jolpica-worker-4", "f1-jolpica-worker", "jolpica", 2013, 2026),
-    ("f1-fastf1-worker-1",  "f1-fastf1-worker",  "fastf1",  2018, 2020),
-    ("f1-fastf1-worker-2",  "f1-fastf1-worker",  "fastf1",  2021, 2023),
-    ("f1-fastf1-worker-3",  "f1-fastf1-worker",  "fastf1",  2024, 2026),
+    ("f1-fastf1-worker-1", "f1-fastf1-worker", "fastf1", 2018, 2020),
+    ("f1-fastf1-worker-2", "f1-fastf1-worker", "fastf1", 2021, 2023),
+    ("f1-fastf1-worker-3", "f1-fastf1-worker", "fastf1", 2024, 2026),
 ]
 
 
@@ -122,9 +122,9 @@ def trigger_worker(
                 {
                     "env": [
                         {"name": "WORKER_TYPE", "value": worker_type},
-                        {"name": "START",       "value": str(start)},
-                        {"name": "END",         "value": str(end)},
-                        {"name": "WORKER_ID",   "value": worker_id},
+                        {"name": "START", "value": str(start)},
+                        {"name": "END", "value": str(end)},
+                        {"name": "WORKER_ID", "value": worker_id},
                     ]
                 }
             ],
@@ -146,9 +146,7 @@ def trigger_worker(
         op = resp.json()
         if op.get("done"):
             if "error" in op:
-                raise RuntimeError(
-                    f"Worker {worker_id} failed to start: {op['error']}"
-                )
+                raise RuntimeError(f"Worker {worker_id} failed to start: {op['error']}")
             return op["response"]["name"]
 
     raise RuntimeError(
@@ -156,9 +154,7 @@ def trigger_worker(
     )
 
 
-def get_execution_status(
-    session: requests.Session, creds, execution_name: str
-) -> dict:
+def get_execution_status(session: requests.Session, creds, execution_name: str) -> dict:
     refresh(session, creds)
     resp = session.get(f"{CLOUD_RUN_BASE}/{execution_name}")
     resp.raise_for_status()
@@ -187,25 +183,22 @@ def derive_status(data: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _STATUS_ICON = {
-    "RUNNING":   "🔄",
-    "SUCCEEDED": "✅",
-    "FAILED":    "❌",
-    "PENDING":   "⏳",
+    "RUNNING": "[RUNNING]",
+    "SUCCEEDED": "[OK]",
+    "FAILED": "[FAIL]",
+    "PENDING": "[PENDING]",
 }
 
 
 def print_progress_table(worker_states: dict) -> None:
-    print(
-        f"\n[{_now()}] ─── Worker Progress ─────────────────────────────────────────"
-    )
+    print(f"\n[{_now()}] ─── Worker Progress ─────────────────────────────────────────")
     print(f"  {'Worker ID':<26} {'Job':<22} {'Range':<12} {'Status'}")
     print(f"  {'─'*26} {'─'*22} {'─'*12} {'─'*12}")
     for wid, info in worker_states.items():
         icon = _STATUS_ICON.get(info["status"], " ")
         rng = f"{info['start']}-{info['end']}"
         print(
-            f"  {wid:<26} {info['job_name']:<22} {rng:<12} "
-            f"{icon} {info['status']}"
+            f"  {wid:<26} {info['job_name']:<22} {rng:<12} " f"{icon} {info['status']}"
         )
     running = sum(1 for i in worker_states.values() if i["status"] == "RUNNING")
     done = sum(1 for i in worker_states.values() if i["status"] != "RUNNING")
@@ -217,9 +210,7 @@ def print_progress_table(worker_states: dict) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def publish_pubsub(
-    session: requests.Session, creds, topic: str, message: dict
-) -> None:
+def publish_pubsub(session: requests.Session, creds, topic: str, message: dict) -> None:
     refresh(session, creds)
     data = base64.b64encode(json.dumps(message).encode()).decode()
     resp = session.post(
@@ -238,9 +229,7 @@ def list_channel_ids_for_emails(
     session: requests.Session, creds, target_emails: list
 ) -> list:
     refresh(session, creds)
-    resp = session.get(
-        f"{MONITORING_BASE}/projects/{PROJECT}/notificationChannels"
-    )
+    resp = session.get(f"{MONITORING_BASE}/projects/{PROJECT}/notificationChannels")
     resp.raise_for_status()
     channels = resp.json().get("notificationChannels", [])
 
@@ -268,7 +257,7 @@ def _build_email_content(
     failed_workers: list,
     worker_states: dict,
 ) -> tuple:
-    label = "SUCCESS ✅" if status == "SUCCEEDED" else "FAILURE ❌"
+    label = "SUCCESS" if status == "SUCCEEDED" else "FAILURE"
     subject = f"[F1 Parallel Ingestion] {label} — {completed_at}"
 
     rows = "\n".join(
@@ -277,7 +266,7 @@ def _build_email_content(
     )
 
     if status == "SUCCEEDED":
-        body = f"""## F1 Parallel Ingestion — SUCCESS ✅
+        body = f"""## F1 Parallel Ingestion — SUCCESS
 
 **Status:** All 7 workers completed successfully
 **Completed:** {completed_at}
@@ -290,7 +279,7 @@ Data is now available in Cloud SQL Studio (`f1_strategy` database).
 """
     else:
         failed_list = "\n".join(f"- `{w}`" for w in failed_workers)
-        body = f"""## F1 Parallel Ingestion — FAILURE ❌
+        body = f"""## F1 Parallel Ingestion — FAILURE
 
 **Status:** {len(failed_workers)} worker(s) failed
 **Completed:** {completed_at}
@@ -392,8 +381,7 @@ def send_email_notification(
                     "displayName": "F1 coordinator notification trigger",
                     "conditionThreshold": {
                         "filter": (
-                            f'metric.type="{metric_type}"'
-                            ' AND resource.type="global"'
+                            f'metric.type="{metric_type}"' ' AND resource.type="global"'
                         ),
                         "comparison": "COMPARISON_GT",
                         "thresholdValue": 0,
@@ -451,23 +439,23 @@ def main() -> None:
             )
             exec_short = execution_name.split("/")[-1]
             worker_states[worker_id] = {
-                "job_name":       job_name,
-                "worker_type":    worker_type,
-                "start":          start,
-                "end":            end,
+                "job_name": job_name,
+                "worker_type": worker_type,
+                "start": start,
+                "end": end,
                 "execution_name": execution_name,
-                "status":         "RUNNING",
+                "status": "RUNNING",
             }
             print(f"[{_now()}] ✓ {worker_id} started → execution: {exec_short}")
         except Exception as exc:
             print(f"[{_now()}] ✗ Failed to trigger {worker_id}: {exc}")
             worker_states[worker_id] = {
-                "job_name":       job_name,
-                "worker_type":    worker_type,
-                "start":          start,
-                "end":            end,
+                "job_name": job_name,
+                "worker_type": worker_type,
+                "start": start,
+                "end": end,
                 "execution_name": None,
-                "status":         "FAILED",
+                "status": "FAILED",
             }
 
     print_progress_table(worker_states)
@@ -524,10 +512,10 @@ def main() -> None:
             creds,
             topic,
             {
-                "coordinator":    "f1-data-coordinator",
-                "status":         overall_status,
-                "completed_at":   completed_at,
-                "workers":        {wid: info["status"] for wid, info in worker_states.items()},
+                "coordinator": "f1-data-coordinator",
+                "status": overall_status,
+                "completed_at": completed_at,
+                "workers": {wid: info["status"] for wid, info in worker_states.items()},
                 "failed_workers": failed_workers,
             },
         )

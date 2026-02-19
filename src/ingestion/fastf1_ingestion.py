@@ -388,7 +388,10 @@ def run_ingestion(
                     # Commit each session immediately — no prior sessions at risk
                     conn.run("COMMIT")
                     logger.info(
-                        "✅ Committed: %d Round %d/%s", season, round_num, session_type
+                        "COMMIT OK:Committed: %d Round %d/%s",
+                        season,
+                        round_num,
+                        session_type,
                     )
 
                     session_count += 1
@@ -405,7 +408,7 @@ def run_ingestion(
 
         compute_driver_profiles(conn)
         conn.run("COMMIT")
-        logger.info("[%s] ✅ Committed: driver profiles", worker_id)
+        logger.info("[%s] COMMIT OK:Committed: driver profiles", worker_id)
 
     logger.info("[%s] FastF1 ingestion complete", worker_id)
 

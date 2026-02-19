@@ -431,15 +431,15 @@ def run_ingestion(
         # --- Bulk reference data (seasons / drivers / constructors) ----------
         all_seasons = ingest_seasons(conn)
         conn.run("COMMIT")
-        logger.info("[%s] ✅ Committed: seasons", worker_id)
+        logger.info("[%s] COMMIT OK:Committed: seasons", worker_id)
 
         ingest_drivers(conn)
         conn.run("COMMIT")
-        logger.info("[%s] ✅ Committed: drivers", worker_id)
+        logger.info("[%s] COMMIT OK:Committed: drivers", worker_id)
 
         ingest_constructors(conn)
         conn.run("COMMIT")
-        logger.info("[%s] ✅ Committed: constructors", worker_id)
+        logger.info("[%s] COMMIT OK:Committed: constructors", worker_id)
 
         # --- Per-season / per-race data --------------------------------------
         target = sorted(s for s in all_seasons if s >= start_season)
@@ -461,7 +461,9 @@ def run_ingestion(
 
             # Commit all race-header rows for the season before processing details
             conn.run("COMMIT")
-            logger.info("[%s] ✅ Committed: %d race headers", worker_id, len(races))
+            logger.info(
+                "[%s] COMMIT OK:Committed: %d race headers", worker_id, len(races)
+            )
 
             for race in races:
                 rnd = int(race["round"])
@@ -477,7 +479,7 @@ def run_ingestion(
 
                 # Commit immediately — 429 on a later race never rolls this back
                 conn.run("COMMIT")
-                logger.info("✅ Committed: %d Round %d", season, rnd)
+                logger.info("COMMIT OK:Committed: %d Round %d", season, rnd)
 
     logger.info("[%s] Ergast ingestion complete", worker_id)
 

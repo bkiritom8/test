@@ -11,7 +11,6 @@
 resource "google_project_service" "ml_apis" {
   for_each = toset([
     "notebooks.googleapis.com", # Vertex AI Workbench
-    "workbench.googleapis.com", # Managed notebook instances
     "ml.googleapis.com",        # Vertex AI (legacy ML Engine alias)
   ])
 
