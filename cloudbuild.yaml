@@ -23,6 +23,19 @@ steps:
       - "docker/Dockerfile.ingestion"
       - "."
 
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-ml"
+    args:
+      - "build"
+      - "--platform"
+      - "linux/amd64"
+      - "-t"
+      - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ml:latest"
+      - "-f"
+      - "docker/Dockerfile.ml"
+      - "."
+
 images:
   - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/api:latest"
   - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ingestion:latest"
+  - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ml:latest"

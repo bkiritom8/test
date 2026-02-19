@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
 
 # Copy application code and ingestion scripts
 COPY src/ /app/src/
-COPY scripts/ /app/scripts/
+COPY pipeline/scripts/ /app/scripts/
 
 # Set Python path
 ENV PYTHONPATH="/app"

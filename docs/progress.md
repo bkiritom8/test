@@ -184,6 +184,51 @@ Migrated data ingestion from the deprecated Ergast API to Jolpica, extended seas
 
 ---
 
+## Session 2026-02-18 - ML Handoff: Repo Restructure + Distributed Pipeline
+
+**Date**: 2026-02-18
+**Duration**: ~3 hours
+**Participants**: Claude Code
+
+**Summary**:
+Full ML team handoff — repo restructured into clean domain separation, distributed Vertex AI training pipeline built end-to-end, ML models implemented, Docker image created, tests written for Vertex AI execution.
+
+**Completed**:
+- [x] Repo restructured: `scripts/` → `pipeline/scripts/`, `terraform/` → `infra/terraform/`, new `ml/`, `api/`, `monitoring/` directories
+- [x] Updated Dockerfiles (`COPY pipeline/scripts/`), CI (`cd infra/terraform`), cloudbuild.yaml (added `build-ml` step + `ml:latest` image)
+- [x] `infra/terraform/vertex_workbench.tf`: `f1-ml-workbench` (n1-standard-8, T4, 60-min auto-shutdown)
+- [x] `infra/terraform/vertex_ml.tf`: notebooks/workbench APIs, Pipelines IAM, `f1-pipeline-trigger` Cloud Run Job, `f1optimizer-pipeline-runs` GCS bucket
+- [x] `pipeline/scripts/workbench_startup.sh`: installs deps, pulls secrets, sets env vars, ADC
+- [x] `ml/distributed/`: `cluster_config.py` (4 configs), `distribution_strategy.py` (Data/Model/HP parallel), `data_sharding.py` (Cloud SQL → GCS shards), `aggregator.py` (best checkpoint → GCS + Pub/Sub)
+- [x] `ml/dag/f1_pipeline.py`: full 5-step KFP pipeline (validate → features → [train×2 parallel] → [eval×2 parallel] → deploy)
+- [x] `ml/dag/components/`: 6 `@dsl.component` files — each with Cloud Logging, GCS artifacts, Pub/Sub status, `retries=2`
+- [x] `ml/dag/pipeline_runner.py`: compile → GCS upload → Vertex AI submit → monitor
+- [x] `ml/models/base_model.py`: abstract base with GCS save/load, Vertex AI Experiments, Pub/Sub
+- [x] `ml/models/strategy_predictor.py`: XGBoost + LightGBM ensemble, Vertex AI entry point
+- [x] `ml/models/pit_stop_optimizer.py`: LSTM, MirroredStrategy, Vertex AI entry point
+- [x] `ml/features/feature_store.py`: Cloud SQL → DataFrame (ADC only)
+- [x] `ml/features/feature_pipeline.py`: 7 derived feature sets
+- [x] `docker/Dockerfile.ml`: nvidia/cuda:11.8 + Python 3.10, NVIDIA env vars, no CMD
+- [x] `docker/requirements-ml.txt`: PyTorch/CUDA, TF, XGBoost, LightGBM, KFP SDK, GCP libs
+- [x] `ml/tests/`: 4 test files + `run_tests_on_vertex.py` (Vertex AI Custom Job, n1-standard-4)
+- [x] `ml/HANDOFF.md`: complete handoff document for ML team
+
+**Key Decisions**:
+1. **No local testing**: all tests run on Vertex AI Custom Jobs only
+2. **No terraform apply**: only file changes — team applies when ready
+3. **No git clone in Workbench startup**: ML team handles their own repo access
+4. **KFP v2 as DAG**: existing Airflow DAG kept in place; Vertex AI Pipelines is the new orchestration layer
+
+**Next Steps for ML Team**:
+1. Access `f1-ml-workbench`, run `python ml/tests/run_tests_on_vertex.py`
+2. Trigger first pipeline run: `python ml/dag/pipeline_runner.py --run-id first-run`
+3. Wire `src/api/main.py` to promoted models in `gs://f1optimizer-models/*/latest/`
+4. Populate `driver_profiles` table
+
+**Blockers**: None — infrastructure complete
+
+---
+
 ## Session Template (Future Entries)
 
 **Date**: YYYY-MM-DD
