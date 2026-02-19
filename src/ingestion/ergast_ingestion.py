@@ -3,7 +3,7 @@ Full historical ingestion from the Jolpica F1 API (api.jolpi.ca/ergast/f1).
 Supports pagination and rate limiting.  Writes into Cloud SQL via pg8000.
 
 Usage:
-    python -m src.ingestion.ergast_ingestion [--start-season 1950] [--end-season 2026]
+    python -m src.ingestion.ergast_ingestion [--start-season 1950] [--end-season 2026] [--worker-id WORKER_ID]
 """
 
 import argparse
@@ -21,6 +21,8 @@ _BASE_URL = "https://api.jolpi.ca/ergast/f1"
 _RATE_LIMIT_DELAY = 0.5  # seconds between every HTTP request
 _PAGE_SIZE = 100
 _TIMEOUT = 30
+# 429 backoff: wait 60s, 120s, 180s, 240s, 300s before each retry
+_RETRY_429_WAITS = [60, 120, 180, 240, 300]
 
 
 # ---------------------------------------------------------------------------
@@ -29,25 +31,53 @@ _TIMEOUT = 30
 
 
 def _get(url: str, params: Optional[dict] = None) -> dict:
-    """GET with rate-limiting and up to 3 retries."""
+    """GET with rate-limiting, 429-specific backoff, and up to 5 retries.
+
+    429 errors use a long exponential backoff (60-300s) so they never cascade
+    into a ROLLBACK that wipes previously committed data.
+    """
     if params is None:
         params = {}
     params["format"] = "json"
 
-    for attempt in range(3):
+    max_attempts = len(_RETRY_429_WAITS) + 1  # 6 attempts total
+    for attempt in range(max_attempts):
         time.sleep(_RATE_LIMIT_DELAY)
         try:
             resp = requests.get(url, params=params, timeout=_TIMEOUT)
+
+            # Handle 429 separately with long backoff before raising
+            if resp.status_code == 429:
+                if attempt < len(_RETRY_429_WAITS):
+                    wait = _RETRY_429_WAITS[attempt]
+                    logger.warning(
+                        "429 Too Many Requests (attempt %d/%d): waiting %ds before retry…",
+                        attempt + 1,
+                        max_attempts,
+                        wait,
+                    )
+                    time.sleep(wait)
+                    continue
+                else:
+                    resp.raise_for_status()  # Exhausted retries
+
             resp.raise_for_status()
             return resp.json()
+
         except requests.exceptions.RequestException as exc:
-            if attempt < 2:
+            if attempt < max_attempts - 1:
+                wait = _RATE_LIMIT_DELAY * (attempt + 2)
                 logger.warning(
-                    "Request failed (attempt %d/3): %s. Retrying…", attempt + 1, exc
+                    "Request failed (attempt %d/%d): %s. Retrying in %.1fs…",
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                    wait,
                 )
-                time.sleep(_RATE_LIMIT_DELAY * (attempt + 2))
+                time.sleep(wait)
             else:
                 raise
+
     raise RuntimeError(f"_get: exhausted all retries for {url}")
 
 
@@ -381,29 +411,61 @@ def ingest_constructor_standings(conn: Any, season: int, round_num: int) -> None
 # ---------------------------------------------------------------------------
 
 
-def run_ingestion(start_season: int = 1950, end_season: Optional[int] = None) -> None:
-    """Run full historical ingestion from the Ergast API."""
-    logger.info("Starting Ergast ingestion from season %d", start_season)
+def run_ingestion(
+    start_season: int = 1950,
+    end_season: Optional[int] = None,
+    worker_id: str = "ergast-worker",
+) -> None:
+    """Run full historical ingestion from the Ergast/Jolpica API.
+
+    Each race is committed immediately after all its data (results, laps,
+    pit stops, qualifying, standings) is inserted.  A 429 from any sub-request
+    only retries that one request with long backoff; it never rolls back
+    previously committed races.
+    """
+    logger.info("[%s] Starting Ergast ingestion from season %d", worker_id, start_season)
 
     with ManagedConnection() as conn:
+        # --- Bulk reference data (seasons / drivers / constructors) ----------
         all_seasons = ingest_seasons(conn)
-        ingest_drivers(conn)
-        ingest_constructors(conn)
+        conn.run("COMMIT")
+        logger.info("[%s] ✅ Committed: seasons", worker_id)
 
+        ingest_drivers(conn)
+        conn.run("COMMIT")
+        logger.info("[%s] ✅ Committed: drivers", worker_id)
+
+        ingest_constructors(conn)
+        conn.run("COMMIT")
+        logger.info("[%s] ✅ Committed: constructors", worker_id)
+
+        # --- Per-season / per-race data --------------------------------------
         target = sorted(s for s in all_seasons if s >= start_season)
         if end_season is not None:
             target = [s for s in target if s <= end_season]
 
         for season in target:
-            logger.info("Season %d …", season)
+            logger.info("[%s] Season %d …", worker_id, season)
             try:
                 races = ingest_races(conn, season)
             except Exception as exc:
-                logger.info("Season %d not yet available, skipping: %s", season, exc)
+                logger.info(
+                    "[%s] Season %d not yet available, skipping: %s",
+                    worker_id,
+                    season,
+                    exc,
+                )
                 continue
+
+            # Commit all race-header rows for the season before processing details
+            conn.run("COMMIT")
+            logger.info("[%s] ✅ Committed: %d race headers", worker_id, len(races))
+
             for race in races:
                 rnd = int(race["round"])
-                logger.info("  Round %d: %s", rnd, race.get("raceName", ""))
+                logger.info(
+                    "[%s]   Round %d: %s", worker_id, rnd, race.get("raceName", "")
+                )
                 ingest_results(conn, season, rnd)
                 ingest_lap_times(conn, season, rnd)
                 ingest_pit_stops(conn, season, rnd)
@@ -411,7 +473,11 @@ def run_ingestion(start_season: int = 1950, end_season: Optional[int] = None) ->
                 ingest_driver_standings(conn, season, rnd)
                 ingest_constructor_standings(conn, season, rnd)
 
-    logger.info("Ergast ingestion complete")
+                # Commit immediately — 429 on a later race never rolls this back
+                conn.run("COMMIT")
+                logger.info("✅ Committed: %d Round %d", season, rnd)
+
+    logger.info("[%s] Ergast ingestion complete", worker_id)
 
 
 if __name__ == "__main__":
@@ -420,9 +486,19 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     parser = argparse.ArgumentParser(
-        description="Ingest F1 historical data from Ergast API"
+        description="Ingest F1 historical data from Ergast/Jolpica API"
     )
     parser.add_argument("--start-season", type=int, default=1950)
     parser.add_argument("--end-season", type=int, default=2026)
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        default="ergast-worker",
+        help="Worker identifier used in log lines",
+    )
     args = parser.parse_args()
-    run_ingestion(start_season=args.start_season, end_season=args.end_season)
+    run_ingestion(
+        start_season=args.start_season,
+        end_season=args.end_season,
+        worker_id=args.worker_id,
+    )

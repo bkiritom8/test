@@ -10,7 +10,7 @@ Driver profile metrics:
 FastF1 cache stored at /tmp/fastf1_cache (configurable via FASTF1_CACHE env var).
 
 Usage:
-    python -m src.ingestion.fastf1_ingestion [--start-year 2018] [--end-year 2026]
+    python -m src.ingestion.fastf1_ingestion [--start-year 2018] [--end-year 2026] [--worker-id WORKER_ID]
 """
 
 import argparse
@@ -335,19 +335,32 @@ def ingest_session(
 # ---------------------------------------------------------------------------
 
 
-def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) -> None:
+def run_ingestion(
+    start_year: int = START_YEAR,
+    end_year: Optional[int] = None,
+    worker_id: str = "fastf1-worker",
+) -> None:
+    """Run FastF1 ingestion for the given year range.
+
+    Each session (Q or R) is committed immediately after its data is inserted.
+    Errors on one session never roll back previously committed sessions.
+    """
     current_year = end_year or datetime.date.today().year
     _setup_cache()
-    logger.info("Starting FastF1 ingestion %d–%d", start_year, current_year)
+    logger.info(
+        "[%s] Starting FastF1 ingestion %d–%d", worker_id, start_year, current_year
+    )
 
     session_count = 0
     with ManagedConnection() as conn:
         for season in range(start_year, current_year + 1):
-            logger.info("Season %d…", season)
+            logger.info("[%s] Season %d…", worker_id, season)
             try:
                 schedule = fastf1.get_event_schedule(season, include_testing=False)
             except Exception as exc:
-                logger.warning("Could not get schedule for %d: %s", season, exc)
+                logger.warning(
+                    "[%s] Could not get schedule for %d: %s", worker_id, season, exc
+                )
                 continue
 
             for _, event in schedule.iterrows():
@@ -355,14 +368,15 @@ def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) 
                 if round_num == 0:
                     continue
                 event_name = event.get("EventName", "")
-                logger.info("  Round %d: %s", round_num, event_name)
+                logger.info("[%s]   Round %d: %s", worker_id, round_num, event_name)
                 for session_type in _SESSION_TYPES:
                     if season >= 2025:
                         try:
                             ingest_session(conn, season, round_num, session_type)
                         except Exception as exc:
                             logger.info(
-                                "Session %d/%d/%s not yet available, skipping: %s",
+                                "[%s] Session %d/%d/%s not yet available, skipping: %s",
+                                worker_id,
                                 season,
                                 round_num,
                                 session_type,
@@ -370,10 +384,18 @@ def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) 
                             )
                     else:
                         ingest_session(conn, season, round_num, session_type)
+
+                    # Commit each session immediately — no prior sessions at risk
+                    conn.run("COMMIT")
+                    logger.info(
+                        "✅ Committed: %d Round %d/%s", season, round_num, session_type
+                    )
+
                     session_count += 1
                     if session_count % _LONG_SLEEP_EVERY == 0:
                         logger.info(
-                            "Rate limit pause: sleeping %ds after %d sessions",
+                            "[%s] Rate limit pause: sleeping %ds after %d sessions",
+                            worker_id,
                             _LONG_SLEEP_SECONDS,
                             session_count,
                         )
@@ -382,8 +404,10 @@ def run_ingestion(start_year: int = START_YEAR, end_year: Optional[int] = None) 
                         time.sleep(_SESSION_DELAY)
 
         compute_driver_profiles(conn)
+        conn.run("COMMIT")
+        logger.info("[%s] ✅ Committed: driver profiles", worker_id)
 
-    logger.info("FastF1 ingestion complete")
+    logger.info("[%s] FastF1 ingestion complete", worker_id)
 
 
 if __name__ == "__main__":
@@ -394,5 +418,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest FastF1 telemetry data")
     parser.add_argument("--start-year", type=int, default=START_YEAR)
     parser.add_argument("--end-year", type=int, default=2026)
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        default="fastf1-worker",
+        help="Worker identifier used in log lines",
+    )
     args = parser.parse_args()
-    run_ingestion(start_year=args.start_year, end_year=args.end_year)
+    run_ingestion(
+        start_year=args.start_year,
+        end_year=args.end_year,
+        worker_id=args.worker_id,
+    )

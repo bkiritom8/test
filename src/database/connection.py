@@ -120,6 +120,14 @@ class ManagedConnection:
                     self._conn.run("ROLLBACK")
                 except Exception:
                     pass
+            else:
+                # Commit any remaining uncommitted work before returning to pool.
+                # Per-race/per-session COMMITs in the ingestion scripts mean this
+                # is usually a no-op, but it acts as a safety net.
+                try:
+                    self._conn.run("COMMIT")
+                except Exception:
+                    pass
             get_pool().put(self._conn)
             self._conn = None
         return False

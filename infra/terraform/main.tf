@@ -612,3 +612,312 @@ output "service_accounts" {
     training = google_service_account.training_sa.email
   }
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Multi-Agent Parallel Ingestion — Coordinator + Worker Cloud Run Jobs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Local: full VPC connector path used by all new jobs
+locals {
+  vpc_connector_path = "projects/${var.project_id}/locations/${var.region}/connectors/f1-vpc-connector"
+
+  # Common DB env vars shared by all ingestion jobs
+  ingestion_db_env = [
+    { name = "DB_HOST", value = google_sql_database_instance.f1_db.private_ip_address },
+    { name = "DB_NAME", value = var.db_name },
+    { name = "DB_PORT", value = "5432" },
+    { name = "DB_USER", value = "postgres" },
+  ]
+}
+
+# ── IAM: coordinator needs to trigger + read worker jobs ────────────────────
+
+# run.developer at project level: lets coordinator call :run on jobs and GET executions
+resource "google_project_iam_member" "api_sa_run_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# Pub/Sub publisher: coordinator + workers publish completion messages
+resource "google_project_iam_member" "api_sa_pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# Secret accessor for api_sa (needed to read DB password secret)
+resource "google_secret_manager_secret_iam_member" "api_sa_secret_accessor" {
+  secret_id = google_secret_manager_secret.db_password.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# ── Notification channels for all team members ───────────────────────────────
+
+resource "google_monitoring_notification_channel" "team_emails" {
+  for_each = toset([
+    "akshattkain0217@gmail.com",
+    "ronitshetty16@gmail.com",
+    "dhanyasureshnaik@gmail.com",
+    "pooja.rajasimha@gmail.com",
+    "ajithsri3103@gmail.com",
+  ])
+
+  display_name = "F1 Team — ${each.value}"
+  type         = "email"
+
+  labels = {
+    email_address = each.value
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# ── Jolpica worker job (executed 4× by coordinator with different env overrides)
+
+resource "google_cloud_run_v2_job" "f1_jolpica_worker" {
+  name     = "f1-jolpica-worker"
+  location = var.region
+  labels   = local.common_labels
+
+  template {
+    template {
+      timeout         = "21600s" # 6 hours
+      service_account = google_service_account.api_sa.email
+
+      vpc_access {
+        connector = local.vpc_connector_path
+        egress    = "ALL_TRAFFIC"
+      }
+
+      containers {
+        image   = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/ingestion:latest"
+        command = ["/bin/bash"]
+        args    = ["/app/scripts/run_worker.sh"]
+
+        resources {
+          limits = {
+            memory = "4Gi"
+            cpu    = "2"
+          }
+        }
+
+        # Default env — coordinator overrides START/END/WORKER_ID/WORKER_TYPE at runtime
+        env {
+          name  = "WORKER_TYPE"
+          value = "jolpica"
+        }
+        env {
+          name  = "START"
+          value = "1950"
+        }
+        env {
+          name  = "END"
+          value = "2026"
+        }
+        env {
+          name  = "WORKER_ID"
+          value = "f1-jolpica-worker"
+        }
+        env {
+          name  = "GCLOUD_PROJECT"
+          value = var.project_id
+        }
+        env {
+          name  = "DB_HOST"
+          value = google_sql_database_instance.f1_db.private_ip_address
+        }
+        env {
+          name  = "DB_NAME"
+          value = var.db_name
+        }
+        env {
+          name  = "DB_PORT"
+          value = "5432"
+        }
+        env {
+          name  = "DB_USER"
+          value = "postgres"
+        }
+        env {
+          name = "DB_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.db_password.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_sql_database_instance.f1_db,
+    google_secret_manager_secret_version.db_password,
+    google_project_iam_member.api_sa_run_developer,
+  ]
+}
+
+# Allow coordinator (api_sa) to trigger jolpica worker executions
+resource "google_cloud_run_v2_job_iam_member" "api_sa_jolpica_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.f1_jolpica_worker.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# ── FastF1 worker job (executed 3× by coordinator with different env overrides)
+
+resource "google_cloud_run_v2_job" "f1_fastf1_worker" {
+  name     = "f1-fastf1-worker"
+  location = var.region
+  labels   = local.common_labels
+
+  template {
+    template {
+      timeout         = "21600s" # 6 hours
+      service_account = google_service_account.api_sa.email
+
+      vpc_access {
+        connector = local.vpc_connector_path
+        egress    = "ALL_TRAFFIC"
+      }
+
+      containers {
+        image   = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/ingestion:latest"
+        command = ["/bin/bash"]
+        args    = ["/app/scripts/run_worker.sh"]
+
+        resources {
+          limits = {
+            memory = "4Gi"
+            cpu    = "2"
+          }
+        }
+
+        env {
+          name  = "WORKER_TYPE"
+          value = "fastf1"
+        }
+        env {
+          name  = "START"
+          value = "2018"
+        }
+        env {
+          name  = "END"
+          value = "2026"
+        }
+        env {
+          name  = "WORKER_ID"
+          value = "f1-fastf1-worker"
+        }
+        env {
+          name  = "GCLOUD_PROJECT"
+          value = var.project_id
+        }
+        env {
+          name  = "DB_HOST"
+          value = google_sql_database_instance.f1_db.private_ip_address
+        }
+        env {
+          name  = "DB_NAME"
+          value = var.db_name
+        }
+        env {
+          name  = "DB_PORT"
+          value = "5432"
+        }
+        env {
+          name  = "DB_USER"
+          value = "postgres"
+        }
+        env {
+          name = "DB_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.db_password.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "FASTF1_CACHE"
+          value = "/tmp/fastf1_cache"
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_sql_database_instance.f1_db,
+    google_secret_manager_secret_version.db_password,
+    google_project_iam_member.api_sa_run_developer,
+  ]
+}
+
+# Allow coordinator (api_sa) to trigger fastf1 worker executions
+resource "google_cloud_run_v2_job_iam_member" "api_sa_fastf1_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.f1_fastf1_worker.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
+# ── Coordinator job ──────────────────────────────────────────────────────────
+
+resource "google_cloud_run_v2_job" "f1_data_coordinator" {
+  name     = "f1-data-coordinator"
+  location = var.region
+  labels   = local.common_labels
+
+  template {
+    template {
+      # 7 hours — enough to trigger all workers and wait for the slowest to finish
+      timeout         = "25200s"
+      service_account = google_service_account.api_sa.email
+
+      vpc_access {
+        connector = local.vpc_connector_path
+        egress    = "ALL_TRAFFIC"
+      }
+
+      containers {
+        image   = "${var.region}-docker.pkg.dev/${var.project_id}/f1-optimizer/ingestion:latest"
+        command = ["/bin/bash"]
+        args    = ["/app/scripts/run_coordinator.sh"]
+
+        resources {
+          limits = {
+            memory = "1Gi"
+            cpu    = "1"
+          }
+        }
+
+        env {
+          name  = "GCLOUD_PROJECT"
+          value = var.project_id
+        }
+        env {
+          name  = "GCLOUD_REGION"
+          value = var.region
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_cloud_run_v2_job.f1_jolpica_worker,
+    google_cloud_run_v2_job.f1_fastf1_worker,
+    google_cloud_run_v2_job_iam_member.api_sa_jolpica_invoker,
+    google_cloud_run_v2_job_iam_member.api_sa_fastf1_invoker,
+    google_project_iam_member.api_sa_run_developer,
+    google_project_iam_member.api_sa_pubsub_publisher,
+  ]
+}
