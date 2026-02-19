@@ -45,19 +45,25 @@ def feature_engineering_op(
     topic_path = publisher.topic_path(project_id, "f1-predictions-dev")
 
     def publish(event: str, status: str, detail: str = "") -> None:
-        payload = json.dumps({
-            "event": event, "component": "feature_engineering",
-            "status": status, "detail": detail,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }).encode()
+        payload = json.dumps(
+            {
+                "event": event,
+                "component": "feature_engineering",
+                "status": status,
+                "detail": detail,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ).encode()
         publisher.publish(topic_path, data=payload)
 
     with open(validated_manifest.path) as f:
         manifest = json.load(f)
 
     publish("component_start", "running")
-    logger.info("feature_engineering: starting, telemetry_available=%s",
-                manifest.get("telemetry_available"))
+    logger.info(
+        "feature_engineering: starting, telemetry_available=%s",
+        manifest.get("telemetry_available"),
+    )
 
     db_user = os.environ.get("DB_USER", "f1_app")
     db_password = os.environ.get("DB_PASSWORD", "")
@@ -65,8 +71,11 @@ def feature_engineering_op(
 
     def get_conn():
         return connector.connect(
-            instance_connection_name, "pg8000",
-            user=db_user, password=db_password, db=db_name,
+            instance_connection_name,
+            "pg8000",
+            user=db_user,
+            password=db_password,
+            db=db_name,
         )
 
     # ── Load raw data ─────────────────────────────────────────────────────────
@@ -88,30 +97,54 @@ def feature_engineering_op(
 
     # ── Tire degradation curves ───────────────────────────────────────────────
     laps = laps.sort_values(["race_id", "driver_id", "lap_number"])
-    laps["lap_time_delta"] = laps.groupby(["race_id", "driver_id"])["lap_time_ms"].diff()
+    laps["lap_time_delta"] = laps.groupby(["race_id", "driver_id"])[
+        "lap_time_ms"
+    ].diff()
     deg_curve = (
         laps.groupby(["tire_compound", "tire_age_laps"])["lap_time_delta"]
         .agg(["mean", "std", "count"])
         .reset_index()
-        .rename(columns={"mean": "deg_mean_ms", "std": "deg_std_ms", "count": "sample_count"})
+        .rename(
+            columns={
+                "mean": "deg_mean_ms",
+                "std": "deg_std_ms",
+                "count": "sample_count",
+            }
+        )
     )
 
     # ── Gap evolution ─────────────────────────────────────────────────────────
-    laps["gap_delta"] = laps.groupby(["race_id", "driver_id"])["gap_to_car_ahead_ms"].diff()
+    laps["gap_delta"] = laps.groupby(["race_id", "driver_id"])[
+        "gap_to_car_ahead_ms"
+    ].diff()
 
     # ── Undercut / overcut windows ────────────────────────────────────────────
     pit_laps = laps[laps["pit_stop_flag"] == 1].copy()
     if not pit_laps.empty:
-        pit_laps["position_after"] = laps.groupby(
-            ["race_id", "driver_id"]
-        )["position"].shift(-2)
+        pit_laps["position_after"] = laps.groupby(["race_id", "driver_id"])[
+            "position"
+        ].shift(-2)
         pit_laps["position_gain"] = pit_laps["position"] - pit_laps["position_after"]
-        undercut_windows = pit_laps[["race_id", "driver_id", "lap_number",
-                                     "position", "position_after", "position_gain"]]
+        undercut_windows = pit_laps[
+            [
+                "race_id",
+                "driver_id",
+                "lap_number",
+                "position",
+                "position_after",
+                "position_gain",
+            ]
+        ]
     else:
         undercut_windows = pd.DataFrame(
-            columns=["race_id", "driver_id", "lap_number",
-                     "position", "position_after", "position_gain"]
+            columns=[
+                "race_id",
+                "driver_id",
+                "lap_number",
+                "position",
+                "position_after",
+                "position_gain",
+            ]
         )
 
     # ── Compound one-hot encoding ─────────────────────────────────────────────
@@ -156,6 +189,9 @@ def feature_engineering_op(
         json.dumps(out_manifest, indent=2), content_type="application/json"
     )
 
-    publish("component_complete", "success",
-            f"features written to gs://{bucket_name}/{base_prefix}")
+    publish(
+        "component_complete",
+        "success",
+        f"features written to gs://{bucket_name}/{base_prefix}",
+    )
     logger.info("feature_engineering: DONE %s", out_manifest)

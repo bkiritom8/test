@@ -45,11 +45,15 @@ def evaluate_op(
     topic_path = publisher.topic_path(project_id, "f1-predictions-dev")
 
     def publish(event: str, status: str, detail: str = "") -> None:
-        payload = json.dumps({
-            "event": event, "component": "evaluate",
-            "status": status, "detail": detail,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }).encode()
+        payload = json.dumps(
+            {
+                "event": event,
+                "component": "evaluate",
+                "status": status,
+                "detail": detail,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ).encode()
         publisher.publish(topic_path, data=payload)
 
     with open(model_artifact.path) as f:
@@ -73,7 +77,9 @@ def evaluate_op(
     train_df = df[df["year"] < max_year].copy()
     logger.info(
         "evaluate: eval_year=%d, eval_rows=%d, train_rows=%d",
-        max_year, len(eval_df), len(train_df),
+        max_year,
+        len(eval_df),
+        len(train_df),
     )
 
     # ── Load model from GCS checkpoint and score ──────────────────────────────
@@ -81,9 +87,11 @@ def evaluate_op(
     # We import dynamically based on model_name.
     if model_name == "strategy_predictor":
         from ml.models.strategy_predictor import StrategyPredictor
+
         model = StrategyPredictor()
     elif model_name == "pit_stop_optimizer":
         from ml.models.pit_stop_optimizer import PitStopOptimizer
+
         model = PitStopOptimizer()
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
@@ -92,16 +100,17 @@ def evaluate_op(
     metrics = model.evaluate(eval_df)
 
     # ── Log to Vertex AI Experiments ──────────────────────────────────────────
-    aiplatform.init(project=project_id, location=region,
-                    experiment=experiment_name)
+    aiplatform.init(project=project_id, location=region, experiment=experiment_name)
 
     with aiplatform.start_run(run=f"{model_name}-{run_id}"):
-        aiplatform.log_params({
-            "model_name": model_name,
-            "run_id": run_id,
-            "eval_year": int(max_year),
-            "cluster_config": model_meta.get("cluster_config", "unknown"),
-        })
+        aiplatform.log_params(
+            {
+                "model_name": model_name,
+                "run_id": run_id,
+                "eval_year": int(max_year),
+                "cluster_config": model_meta.get("cluster_config", "unknown"),
+            }
+        )
         aiplatform.log_metrics(metrics)
 
     # ── Write outputs ─────────────────────────────────────────────────────────
@@ -126,10 +135,7 @@ def evaluate_op(
     gcs_client = storage.Client(project=project_id)
     gcs_client.bucket(bucket_name).blob(
         f"eval_reports/{run_id}/{model_name}.json"
-    ).upload_from_string(
-        json.dumps(report, indent=2), content_type="application/json"
-    )
+    ).upload_from_string(json.dumps(report, indent=2), content_type="application/json")
 
-    publish("component_complete", "success",
-            f"model={model_name} metrics={metrics}")
+    publish("component_complete", "success", f"model={model_name} metrics={metrics}")
     logger.info("evaluate: DONE %s", report)

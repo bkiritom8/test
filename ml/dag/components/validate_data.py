@@ -46,13 +46,16 @@ def validate_data_op(
 
     def publish(event: str, status: str, detail: str = "") -> None:
         import json as _json
-        payload = _json.dumps({
-            "event": event,
-            "component": "validate_data",
-            "status": status,
-            "detail": detail,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }).encode()
+
+        payload = _json.dumps(
+            {
+                "event": event,
+                "component": "validate_data",
+                "status": status,
+                "detail": detail,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ).encode()
         publisher.publish(topic_path, data=payload)
 
     publish("component_start", "running")
@@ -65,8 +68,11 @@ def validate_data_op(
 
     def get_conn():
         return connector.connect(
-            instance_connection_name, "pg8000",
-            user=db_user, password=db_password, db=db_name,
+            instance_connection_name,
+            "pg8000",
+            user=db_user,
+            password=db_password,
+            db=db_name,
         )
 
     checks: dict[str, int] = {}

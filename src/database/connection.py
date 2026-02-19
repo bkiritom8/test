@@ -130,4 +130,3 @@ class ManagedConnection:
                     pass
             get_pool().put(self._conn)
             self._conn = None
-        return False

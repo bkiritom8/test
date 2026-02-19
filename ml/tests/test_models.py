@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # ── Dummy data ────────────────────────────────────────────────────────────────
+
 
 def _make_lap_df(n_drivers: int = 3, laps_per_driver: int = 60) -> pd.DataFrame:
     rng = np.random.default_rng(0)
@@ -27,47 +27,51 @@ def _make_lap_df(n_drivers: int = 3, laps_per_driver: int = 60) -> pd.DataFrame:
     for driver_id in range(n_drivers):
         for lap in range(1, laps_per_driver + 1):
             compound = rng.choice(["SOFT", "MEDIUM", "HARD"])
-            rows.append({
-                "race_id": 1,
-                "driver_id": driver_id,
-                "lap_number": lap,
-                "lap_time_ms": 85000 + rng.integers(-3000, 3000),
-                "tire_compound": compound,
-                "tire_age_laps": lap % 20 + 1,
-                "gap_to_car_ahead_ms": int(rng.integers(0, 20000)),
-                "gap_to_leader_ms": int(rng.integers(0, 100000)),
-                "position": int(rng.integers(1, 20)),
-                "pit_stop_flag": int(lap % 20 == 0),
-                "year": 2023,
-                "circuit_id": "monza",
-                "round": 1,
-                "driver_ref": f"driver_{driver_id}",
-            })
+            rows.append(
+                {
+                    "race_id": 1,
+                    "driver_id": driver_id,
+                    "lap_number": lap,
+                    "lap_time_ms": 85000 + rng.integers(-3000, 3000),
+                    "tire_compound": compound,
+                    "tire_age_laps": lap % 20 + 1,
+                    "gap_to_car_ahead_ms": int(rng.integers(0, 20000)),
+                    "gap_to_leader_ms": int(rng.integers(0, 100000)),
+                    "position": int(rng.integers(1, 20)),
+                    "pit_stop_flag": int(lap % 20 == 0),
+                    "year": 2023,
+                    "circuit_id": "monza",
+                    "round": 1,
+                    "driver_ref": f"driver_{driver_id}",
+                }
+            )
     return pd.DataFrame(rows)
 
 
 # ── StrategyPredictor tests ───────────────────────────────────────────────────
+
 
 class TestStrategyPredictor:
 
     @pytest.fixture(autouse=True)
     def _patch_gcp(self):
         """Suppress all GCP calls (Cloud Logging, Pub/Sub, GCS)."""
-        with patch("ml.models.base_model.cloud_logging.Client"), \
-             patch("ml.models.base_model.pubsub_v1.PublisherClient"), \
-             patch("ml.models.base_model.storage.Client"):
+        with patch("ml.models.base_model.cloud_logging.Client"), patch(
+            "ml.models.base_model.pubsub_v1.PublisherClient"
+        ), patch("ml.models.base_model.storage.Client"):
             yield
 
     @pytest.fixture
     def model(self):
         from ml.models.strategy_predictor import StrategyPredictor
+
         # Use CPU-friendly params for fast smoke test
         return StrategyPredictor(
             xgb_params={
                 "n_estimators": 10,
                 "max_depth": 3,
                 "learning_rate": 0.1,
-                "tree_method": "hist",   # CPU (not gpu_hist)
+                "tree_method": "hist",  # CPU (not gpu_hist)
                 "random_state": 0,
             },
             lgb_params={
@@ -135,6 +139,7 @@ class TestStrategyPredictor:
 
                 # Load from same temp dir
                 from ml.models.strategy_predictor import StrategyPredictor
+
                 new_model = StrategyPredictor()
                 new_model._load_native(native_dir)
 
@@ -145,18 +150,20 @@ class TestStrategyPredictor:
 
 # ── PitStopOptimizer tests ────────────────────────────────────────────────────
 
+
 class TestPitStopOptimizer:
 
     @pytest.fixture(autouse=True)
     def _patch_gcp(self):
-        with patch("ml.models.base_model.cloud_logging.Client"), \
-             patch("ml.models.base_model.pubsub_v1.PublisherClient"), \
-             patch("ml.models.base_model.storage.Client"):
+        with patch("ml.models.base_model.cloud_logging.Client"), patch(
+            "ml.models.base_model.pubsub_v1.PublisherClient"
+        ), patch("ml.models.base_model.storage.Client"):
             yield
 
     @pytest.fixture
     def model(self):
         from ml.models.pit_stop_optimizer import PitStopOptimizer
+
         return PitStopOptimizer(
             sequence_len=5,
             lstm_units=[16],
@@ -204,6 +211,7 @@ class TestPitStopOptimizer:
             assert os.path.exists(os.path.join(tmp, "config.json"))
 
             from ml.models.pit_stop_optimizer import PitStopOptimizer
+
             new_model = PitStopOptimizer()
             new_model._load_native(tmp)
             assert new_model._trained
@@ -211,20 +219,23 @@ class TestPitStopOptimizer:
 
 # ── BaseF1Model interface enforcement ─────────────────────────────────────────
 
+
 class TestBaseModelInterface:
 
     def test_cannot_instantiate_base(self):
         from ml.models.base_model import BaseF1Model
+
         with pytest.raises(TypeError):
             BaseF1Model()
 
     def test_concrete_model_has_all_methods(self):
         from ml.models.strategy_predictor import StrategyPredictor
-        with patch("ml.models.base_model.cloud_logging.Client"), \
-             patch("ml.models.base_model.pubsub_v1.PublisherClient"), \
-             patch("ml.models.base_model.storage.Client"):
+
+        with patch("ml.models.base_model.cloud_logging.Client"), patch(
+            "ml.models.base_model.pubsub_v1.PublisherClient"
+        ), patch("ml.models.base_model.storage.Client"):
             m = StrategyPredictor()
         for method in ("train", "predict", "evaluate", "save", "load"):
-            assert hasattr(m, method) and callable(getattr(m, method)), (
-                f"StrategyPredictor missing method: {method}"
-            )
+            assert hasattr(m, method) and callable(
+                getattr(m, method)
+            ), f"StrategyPredictor missing method: {method}"

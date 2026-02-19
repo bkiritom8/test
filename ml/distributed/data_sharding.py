@@ -36,7 +36,9 @@ INSTANCE_CONNECTION_NAME = os.environ.get(
 DB_NAME = os.environ.get("DB_NAME", "f1_strategy")
 DB_USER = os.environ.get("DB_USER", "f1_app")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
-TRAINING_BUCKET = os.environ.get("TRAINING_BUCKET", "gs://f1optimizer-training").lstrip("gs://")
+TRAINING_BUCKET = os.environ.get("TRAINING_BUCKET", "gs://f1optimizer-training").lstrip(
+    "gs://"
+)
 
 
 class DataSharding:
@@ -65,9 +67,7 @@ class DataSharding:
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT race_id FROM races ORDER BY year ASC, round ASC"
-            )
+            cursor.execute("SELECT race_id FROM races ORDER BY year ASC, round ASC")
             rows = cursor.fetchall()
             return [row[0] for row in rows]
         finally:

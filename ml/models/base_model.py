@@ -187,14 +187,17 @@ class BaseF1Model(ABC):
         try:
             from google.cloud import aiplatform
 
-            aiplatform.init(project=PROJECT_ID, location=REGION,
-                            experiment=experiment_name)
+            aiplatform.init(
+                project=PROJECT_ID, location=REGION, experiment=experiment_name
+            )
             with aiplatform.start_run(run=run_name):
                 aiplatform.log_params(params)
                 aiplatform.log_metrics(metrics)
             self.logger.info(
                 "%s: logged to experiment=%s run=%s",
-                self.model_name, experiment_name, run_name,
+                self.model_name,
+                experiment_name,
+                run_name,
             )
         except Exception as exc:
             self.logger.warning(
@@ -205,13 +208,15 @@ class BaseF1Model(ABC):
 
     def _publish(self, event: str, status: str, detail: str = "") -> None:
         try:
-            payload = json.dumps({
-                "event": event,
-                "model": self.model_name,
-                "status": status,
-                "detail": detail,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }).encode()
+            payload = json.dumps(
+                {
+                    "event": event,
+                    "model": self.model_name,
+                    "status": status,
+                    "detail": detail,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            ).encode()
             self._publisher.publish(self._topic_path, data=payload)
         except Exception as exc:
             self.logger.warning("Pub/Sub publish failed: %s", exc)

@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ── ClusterConfig tests ───────────────────────────────────────────────────────
+
 
 class TestClusterConfig:
 
@@ -29,14 +29,20 @@ class TestClusterConfig:
             HYPERPARAMETER_SEARCH,
             CPU_DISTRIBUTED,
         )
-        for cfg in (SINGLE_NODE_MULTI_GPU, MULTI_NODE_DATA_PARALLEL,
-                    HYPERPARAMETER_SEARCH, CPU_DISTRIBUTED):
+
+        for cfg in (
+            SINGLE_NODE_MULTI_GPU,
+            MULTI_NODE_DATA_PARALLEL,
+            HYPERPARAMETER_SEARCH,
+            CPU_DISTRIBUTED,
+        ):
             assert cfg.name
             assert cfg.machine_type
             assert cfg.replica_count >= 1
 
     def test_worker_pool_specs_structure(self):
         from ml.distributed.cluster_config import MULTI_NODE_DATA_PARALLEL
+
         specs = MULTI_NODE_DATA_PARALLEL.worker_pool_specs()
         assert len(specs) == 1
         spec = specs[0]
@@ -47,15 +53,19 @@ class TestClusterConfig:
 
     def test_worker_pool_specs_with_args(self):
         from ml.distributed.cluster_config import SINGLE_NODE_MULTI_GPU
+
         specs = SINGLE_NODE_MULTI_GPU.worker_pool_specs(
             args=["python", "-m", "ml.models.strategy_predictor"],
         )
         assert specs[0]["container_spec"]["args"] == [
-            "python", "-m", "ml.models.strategy_predictor"
+            "python",
+            "-m",
+            "ml.models.strategy_predictor",
         ]
 
     def test_worker_pool_specs_with_env_vars(self):
         from ml.distributed.cluster_config import CPU_DISTRIBUTED
+
         specs = CPU_DISTRIBUTED.worker_pool_specs(
             env_vars={"PROJECT_ID": "f1optimizer", "REGION": "us-central1"}
         )
@@ -66,12 +76,14 @@ class TestClusterConfig:
 
     def test_cpu_config_has_no_accelerator(self):
         from ml.distributed.cluster_config import CPU_DISTRIBUTED
+
         specs = CPU_DISTRIBUTED.worker_pool_specs()
         machine_spec = specs[0]["machine_spec"]
         assert "accelerator_type" not in machine_spec
 
     def test_gpu_config_has_accelerator(self):
         from ml.distributed.cluster_config import SINGLE_NODE_MULTI_GPU
+
         specs = SINGLE_NODE_MULTI_GPU.worker_pool_specs()
         machine_spec = specs[0]["machine_spec"]
         assert "accelerator_type" in machine_spec
@@ -79,22 +91,25 @@ class TestClusterConfig:
 
     def test_hp_search_config_has_trial_counts(self):
         from ml.distributed.cluster_config import HYPERPARAMETER_SEARCH
+
         assert HYPERPARAMETER_SEARCH.parallel_trial_count == 5
         assert HYPERPARAMETER_SEARCH.max_trial_count == 20
 
 
 # ── DataSharding tests ────────────────────────────────────────────────────────
 
+
 class TestDataSharding:
 
     def _make_sharding(self, num_workers: int, mock_race_ids: list[int]):
         from ml.distributed.data_sharding import DataSharding
+
         sharding = DataSharding(num_workers=num_workers)
         sharding._fetch_all_race_ids = MagicMock(return_value=mock_race_ids)
         return sharding
 
     def test_shards_are_disjoint(self):
-        race_ids = list(range(1, 41))   # 40 races, 4 workers → 10 each
+        race_ids = list(range(1, 41))  # 40 races, 4 workers → 10 each
         sharding = self._make_sharding(4, race_ids)
 
         assigned = [set(sharding.get_worker_race_ids(i)) for i in range(4)]
@@ -117,16 +132,16 @@ class TestDataSharding:
 
     def test_uneven_shards_handled(self):
         """41 races across 4 workers — remainder distributed to first workers."""
-        race_ids = list(range(1, 42))   # 41 races
+        race_ids = list(range(1, 42))  # 41 races
         sharding = self._make_sharding(4, race_ids)
 
         sizes = [len(sharding.get_worker_race_ids(i)) for i in range(4)]
         total = sum(sizes)
         assert total == 41, f"Expected 41 total races, got {total}"
         # First worker gets the extra race
-        assert sizes[0] == sizes[1] + 1 or sizes[0] == sizes[1], (
-            "Remainder not distributed to leading workers"
-        )
+        assert (
+            sizes[0] == sizes[1] + 1 or sizes[0] == sizes[1]
+        ), "Remainder not distributed to leading workers"
 
     def test_empty_race_list(self):
         sharding = self._make_sharding(4, [])
@@ -151,17 +166,20 @@ class TestDataSharding:
 
 # ── Aggregator tests ──────────────────────────────────────────────────────────
 
+
 class TestAggregator:
 
     @pytest.fixture(autouse=True)
     def _patch_gcp(self):
-        with patch("ml.distributed.aggregator.storage.Client"), \
-             patch("ml.distributed.aggregator.pubsub_v1.PublisherClient"):
+        with patch("ml.distributed.aggregator.storage.Client"), patch(
+            "ml.distributed.aggregator.pubsub_v1.PublisherClient"
+        ):
             yield
 
     @pytest.fixture
     def aggregator(self):
         from ml.distributed.aggregator import Aggregator
+
         return Aggregator(model_name="strategy_predictor", run_id="test-001")
 
     def test_pick_best_checkpoint_lowest_loss(self, aggregator):
@@ -202,10 +220,12 @@ class TestAggregator:
 
 # ── DistributionStrategy tests ────────────────────────────────────────────────
 
+
 class TestDistributionStrategy:
 
     def test_data_parallel_single_node_describe(self):
         from ml.distributed.distribution_strategy import DataParallelStrategy
+
         s = DataParallelStrategy(multi_worker=False)
         desc = s.describe()
         assert desc["type"] == "data_parallel"
@@ -213,12 +233,14 @@ class TestDistributionStrategy:
 
     def test_data_parallel_multi_node_describe(self):
         from ml.distributed.distribution_strategy import DataParallelStrategy
+
         s = DataParallelStrategy(multi_worker=True)
         desc = s.describe()
         assert "MultiWorker" in desc["strategy"]
 
     def test_hyperparameter_parallel_vizier_spec(self):
         from ml.distributed.distribution_strategy import HyperparameterParallelStrategy
+
         s = HyperparameterParallelStrategy(
             parallel_trial_count=3, max_trial_count=10, algorithm="GRID_SEARCH"
         )
@@ -231,12 +253,14 @@ class TestDistributionStrategy:
 
     def test_hyperparameter_parallel_describe(self):
         from ml.distributed.distribution_strategy import HyperparameterParallelStrategy
+
         s = HyperparameterParallelStrategy()
         desc = s.describe()
         assert desc["type"] == "hyperparameter_parallel"
 
     def test_model_parallel_describe(self):
         from ml.distributed.distribution_strategy import ModelParallelStrategy
+
         s = ModelParallelStrategy(num_gpus=4)
         desc = s.describe()
         assert desc["type"] == "model_parallel"

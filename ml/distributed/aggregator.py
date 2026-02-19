@@ -28,8 +28,12 @@ from google.cloud import pubsub_v1, storage
 logger = logging.getLogger(__name__)
 
 PROJECT_ID = os.environ.get("PROJECT_ID", "f1optimizer")
-MODELS_BUCKET = os.environ.get("MODELS_BUCKET", "gs://f1optimizer-models").lstrip("gs://")
-TRAINING_BUCKET = os.environ.get("TRAINING_BUCKET", "gs://f1optimizer-training").lstrip("gs://")
+MODELS_BUCKET = os.environ.get("MODELS_BUCKET", "gs://f1optimizer-models").lstrip(
+    "gs://"
+)
+TRAINING_BUCKET = os.environ.get("TRAINING_BUCKET", "gs://f1optimizer-training").lstrip(
+    "gs://"
+)
 PUBSUB_TOPIC = os.environ.get("PUBSUB_TOPIC", "f1-predictions-dev")
 
 
@@ -126,7 +130,7 @@ class Aggregator:
 
         blobs = list(source_bucket.list_blobs(prefix=source_prefix))
         for blob in blobs:
-            relative = blob.name[len(source_prefix):].lstrip("/")
+            relative = blob.name[len(source_prefix) :].lstrip("/")
             for dest_prefix in (dest_versioned, dest_latest):
                 dest_blob = dest_bucket.blob(f"{dest_prefix}{relative}")
                 token, _, _ = dest_blob.rewrite(blob)
@@ -160,7 +164,9 @@ class Aggregator:
 
     # ── Pub/Sub notification ──────────────────────────────────────────────────
 
-    def publish_completion(self, checkpoint: CheckpointMeta, model_uri: str = "") -> None:
+    def publish_completion(
+        self, checkpoint: CheckpointMeta, model_uri: str = ""
+    ) -> None:
         """Publish a training-complete event to f1-predictions-dev."""
         payload = {
             "event": "training_complete",

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-SEQUENCE_LEN = 10   # laps of history fed to LSTM
+SEQUENCE_LEN = 10  # laps of history fed to LSTM
 
 SEQUENCE_FEATURES = [
     "lap_time_ms",
@@ -109,7 +109,8 @@ class PitStopOptimizer(BaseF1Model):
         for i, units in enumerate(self.lstm_units):
             return_sequences = i < len(self.lstm_units) - 1
             x = tf.keras.layers.LSTM(
-                units, return_sequences=return_sequences,
+                units,
+                return_sequences=return_sequences,
                 dropout=self.dropout_rate,
             )(x)
 
@@ -144,7 +145,9 @@ class PitStopOptimizer(BaseF1Model):
             self._feature_means = df[cols].mean().to_dict()
             self._feature_stds = df[cols].std().replace(0, 1).to_dict()
         for col in cols:
-            df[col] = (df[col] - self._feature_means.get(col, 0)) / self._feature_stds.get(col, 1)
+            df[col] = (
+                df[col] - self._feature_means.get(col, 0)
+            ) / self._feature_stds.get(col, 1)
         return df
 
     def _to_sequences(
@@ -163,7 +166,7 @@ class PitStopOptimizer(BaseF1Model):
             target_arr = grp[TARGET_COL].fillna(0).values
 
             for i in range(self.sequence_len, len(grp)):
-                seqs.append(seq_arr[i - self.sequence_len: i])
+                seqs.append(seq_arr[i - self.sequence_len : i])
                 statics.append(static_arr[i])
                 labels.append(target_arr[i])
 
@@ -176,13 +179,19 @@ class PitStopOptimizer(BaseF1Model):
         df = df.copy()
         if "circuit_id" in df.columns:
             from sklearn.preprocessing import LabelEncoder
+
             df["circuit_id_enc"] = LabelEncoder().fit_transform(
                 df["circuit_id"].astype(str)
             )
         else:
             df["circuit_id_enc"] = 0
-        for col in ["compound_SOFT", "compound_MEDIUM", "compound_HARD",
-                    "compound_INTER", "compound_WET"]:
+        for col in [
+            "compound_SOFT",
+            "compound_MEDIUM",
+            "compound_HARD",
+            "compound_INTER",
+            "compound_WET",
+        ]:
             if col not in df.columns:
                 df[col] = 0
         for col in ["lap_time_delta", "gap_delta"]:
@@ -228,7 +237,8 @@ class PitStopOptimizer(BaseF1Model):
         )
 
         history = self._keras_model.fit(
-            [seq_X[train_idx], static_X[train_idx]], y[train_idx],
+            [seq_X[train_idx], static_X[train_idx]],
+            y[train_idx],
             validation_data=([seq_X[val_idx], static_X[val_idx]], y[val_idx]),
             batch_size=self.batch_size * strategy.num_replicas_in_sync,
             epochs=self.epochs,
@@ -260,10 +270,8 @@ class PitStopOptimizer(BaseF1Model):
             raise RuntimeError("Model not trained. Call train() or load() first.")
         df = self._prepare(df, fit=False)
         seq_X, static_X, _ = self._to_sequences(df)
-        urgency = self._keras_model.predict(
-            [seq_X, static_X], verbose=0
-        ).flatten()
-        out = df.iloc[self.sequence_len:].copy()
+        urgency = self._keras_model.predict([seq_X, static_X], verbose=0).flatten()
+        out = df.iloc[self.sequence_len :].copy()
         out["pit_urgency"] = urgency
         out["recommend_pit"] = (urgency > 0.7).astype(int)
         return out
@@ -271,9 +279,7 @@ class PitStopOptimizer(BaseF1Model):
     def evaluate(self, df: pd.DataFrame) -> dict[str, float]:
         df = self._prepare(df, fit=False)
         seq_X, static_X, y = self._to_sequences(df)
-        preds = self._keras_model.predict(
-            [seq_X, static_X], verbose=0
-        ).flatten()
+        preds = self._keras_model.predict([seq_X, static_X], verbose=0).flatten()
         return {
             "val_loss": float(mean_absolute_error(y, preds)),
             "val_roc_auc": float(roc_auc_score(y, preds)),
@@ -323,6 +329,7 @@ class PitStopOptimizer(BaseF1Model):
 
 # ── Vertex AI entry point ─────────────────────────────────────────────────────
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--mode", choices=["train", "predict"], default="train")
@@ -343,6 +350,7 @@ def _train_entrypoint(args: argparse.Namespace) -> None:
     model.save(checkpoint_uri)
 
     from google.cloud import storage as gcs
+
     bucket_name, prefix = checkpoint_uri.lstrip("gs://").split("/", 1)
     manifest = {
         "worker_index": 0,

@@ -74,7 +74,7 @@ DEFAULT_XGB_PARAMS: dict[str, Any] = {
     "colsample_bytree": 0.8,
     "reg_alpha": 0.1,
     "reg_lambda": 1.0,
-    "tree_method": "gpu_hist",   # uses T4 GPU if available
+    "tree_method": "gpu_hist",  # uses T4 GPU if available
     "eval_metric": "mae",
     "random_state": 42,
 }
@@ -136,8 +136,13 @@ class StrategyPredictor(BaseF1Model):
             )
 
         # Fill missing one-hot compound columns
-        for col in ["compound_SOFT", "compound_MEDIUM", "compound_HARD",
-                    "compound_INTER", "compound_WET"]:
+        for col in [
+            "compound_SOFT",
+            "compound_MEDIUM",
+            "compound_HARD",
+            "compound_INTER",
+            "compound_WET",
+        ]:
             if col not in df.columns:
                 df[col] = 0
 
@@ -169,7 +174,8 @@ class StrategyPredictor(BaseF1Model):
         # XGBoost
         self._xgb_model = xgb.XGBRegressor(**self.xgb_params)
         self._xgb_model.fit(
-            X_train, y_train,
+            X_train,
+            y_train,
             eval_set=[(X_val, y_val)],
             verbose=50,
         )
@@ -177,7 +183,8 @@ class StrategyPredictor(BaseF1Model):
         # LightGBM
         self._lgb_model = lgb.LGBMRegressor(**self.lgb_params)
         self._lgb_model.fit(
-            X_train, y_train,
+            X_train,
+            y_train,
             eval_set=[(X_val, y_val)],
         )
 
@@ -255,8 +262,11 @@ class StrategyPredictor(BaseF1Model):
             "lgb_params": self.lgb_params,
             "ensemble_weight_xgb": self.ensemble_weight_xgb,
             "feature_cols": self._feature_cols,
-            "label_encoder_classes": self._label_encoder.classes_.tolist()
-            if hasattr(self._label_encoder, "classes_") else [],
+            "label_encoder_classes": (
+                self._label_encoder.classes_.tolist()
+                if hasattr(self._label_encoder, "classes_")
+                else []
+            ),
         }
         with open(os.path.join(local_dir, "config.json"), "w") as f:
             json.dump(config, f, indent=2)
@@ -290,6 +300,7 @@ class StrategyPredictor(BaseF1Model):
 
 # ── Vertex AI entry point ─────────────────────────────────────────────────────
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--mode", choices=["train", "predict"], default="train")
@@ -320,6 +331,7 @@ def _train_entrypoint(args: argparse.Namespace) -> None:
 
     # Write checkpoint manifest for aggregator
     from google.cloud import storage as gcs
+
     bucket_name, prefix = checkpoint_uri.lstrip("gs://").split("/", 1)
     manifest = {
         "worker_index": worker_index,

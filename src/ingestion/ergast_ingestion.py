@@ -22,7 +22,7 @@ _RATE_LIMIT_DELAY = 0.5  # seconds between every HTTP request
 _PAGE_SIZE = 100
 _TIMEOUT = 30
 # 429 backoff: wait 60s, 120s, 180s, 240s, 300s before each retry
-_RETRY_429_WAITS = [60, 120, 180, 240, 300]
+_RETRY_429_WAITS = [60.0, 120.0, 180.0, 240.0, 300.0]
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +423,9 @@ def run_ingestion(
     only retries that one request with long backoff; it never rolls back
     previously committed races.
     """
-    logger.info("[%s] Starting Ergast ingestion from season %d", worker_id, start_season)
+    logger.info(
+        "[%s] Starting Ergast ingestion from season %d", worker_id, start_season
+    )
 
     with ManagedConnection() as conn:
         # --- Bulk reference data (seasons / drivers / constructors) ----------

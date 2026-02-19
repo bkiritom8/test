@@ -48,7 +48,9 @@ def run_tests_locally(test_path: str) -> tuple[int, str]:
     """
     result = subprocess.run(
         [
-            sys.executable, "-m", "pytest",
+            sys.executable,
+            "-m",
+            "pytest",
             test_path,
             "-v",
             "--tb=short",
@@ -86,8 +88,10 @@ def submit_test_job(test_path: str, run_id: str) -> aiplatform.CustomJob:
                         "python",
                         "ml/tests/run_tests_on_vertex.py",
                         "--run-in-container",
-                        "--test-path", test_path,
-                        "--run-id", run_id,
+                        "--test-path",
+                        test_path,
+                        "--run-id",
+                        run_id,
                     ],
                     "env": [
                         {"name": "PROJECT_ID", "value": PROJECT_ID},
@@ -102,7 +106,7 @@ def submit_test_job(test_path: str, run_id: str) -> aiplatform.CustomJob:
     logger.info("Submitting test job: %s", job.display_name)
     job.run(
         service_account=SERVICE_ACCOUNT,
-        sync=True,   # block until complete
+        sync=True,  # block until complete
     )
     return job
 
@@ -118,14 +122,16 @@ def log_results_to_cloud(
         cloud_logging.Client(project=PROJECT_ID).setup_logging()
         result_log = logging.getLogger("f1.tests.results")
         result_log.info(
-            json.dumps({
-                "run_id": run_id,
-                "test_path": test_path,
-                "exit_code": exit_code,
-                "passed": exit_code == 0,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "output_preview": output[-2000:],  # last 2000 chars
-            })
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "test_path": test_path,
+                    "exit_code": exit_code,
+                    "passed": exit_code == 0,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "output_preview": output[-2000:],  # last 2000 chars
+                }
+            )
         )
     except Exception as exc:
         logger.warning("Could not write to Cloud Logging: %s", exc)
@@ -158,7 +164,8 @@ def main() -> None:
         # We are already inside the Vertex AI container — run pytest directly
         logger.info(
             "Running tests in container: test_path=%s run_id=%s",
-            args.test_path, args.run_id,
+            args.test_path,
+            args.run_id,
         )
         exit_code, output = run_tests_locally(args.test_path)
         log_results_to_cloud(args.run_id, exit_code, output, args.test_path)
@@ -167,7 +174,8 @@ def main() -> None:
         if exit_code != 0:
             logger.error(
                 "Tests FAILED (exit_code=%d). Check Cloud Logging run_id=%s",
-                exit_code, args.run_id,
+                exit_code,
+                args.run_id,
             )
             sys.exit(exit_code)
         else:
@@ -177,7 +185,8 @@ def main() -> None:
         # We are outside the container — submit to Vertex AI
         logger.info(
             "Submitting test job to Vertex AI: test_path=%s run_id=%s",
-            args.test_path, args.run_id,
+            args.test_path,
+            args.run_id,
         )
         try:
             submit_test_job(args.test_path, args.run_id)

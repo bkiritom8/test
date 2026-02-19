@@ -69,7 +69,9 @@ class FeaturePipeline:
         df = self._weather_impact(df)
         df = self._clean(df)
 
-        logger.info("FeaturePipeline: enriched rows=%d, cols=%d", len(df), len(df.columns))
+        logger.info(
+            "FeaturePipeline: enriched rows=%d, cols=%d", len(df), len(df.columns)
+        )
         return df
 
     def write(self, df: pd.DataFrame, label: str = "") -> str:
@@ -82,9 +84,9 @@ class FeaturePipeline:
     # ── Feature computations ──────────────────────────────────────────────────
 
     def _sort(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df.sort_values(
-            ["race_id", "driver_id", "lap_number"]
-        ).reset_index(drop=True)
+        return df.sort_values(["race_id", "driver_id", "lap_number"]).reset_index(
+            drop=True
+        )
 
     def _encode_compounds(self, df: pd.DataFrame) -> pd.DataFrame:
         """One-hot encode tire_compound."""
@@ -113,9 +115,7 @@ class FeaturePipeline:
 
         df["lap_time_delta"] = grp["lap_time_ms"].diff()
 
-        df["deg_rate"] = (
-            df["lap_time_delta"] / df["tire_age_laps"].clip(lower=1)
-        )
+        df["deg_rate"] = df["lap_time_delta"] / df["tire_age_laps"].clip(lower=1)
         df["deg_rate_roll3"] = grp["deg_rate"].transform(
             lambda s: s.rolling(3, min_periods=1).mean()
         )
@@ -148,6 +148,7 @@ class FeaturePipeline:
                     return 0.0
                 x = np.arange(len(window), dtype=float)
                 return float(np.polyfit(x, window.values, 1)[0])
+
             return s.rolling(5, min_periods=2).apply(_slope, raw=False)
 
         df["gap_trend"] = grp["gap_to_car_ahead_ms"].transform(rolling_slope)
@@ -196,9 +197,7 @@ class FeaturePipeline:
             return df
 
         max_laps = df.groupby("race_id")["lap_number"].transform("max").clip(lower=1)
-        df["fuel_load_pct"] = (
-            1.0 - (df["lap_number"] - 1) / max_laps
-        ).clip(lower=0.0)
+        df["fuel_load_pct"] = (1.0 - (df["lap_number"] - 1) / max_laps).clip(lower=0.0)
 
         # Fuel-corrected lap time: remove estimated fuel effect
         df["lap_time_fuel_corrected_ms"] = (
@@ -217,9 +216,11 @@ class FeaturePipeline:
             df["sc_prob"] = 0.0
             return df
 
-        race_lap_stats = df.groupby(["race_id", "lap_number"])["lap_time_ms"].agg(
-            ["median", "std"]
-        ).reset_index()
+        race_lap_stats = (
+            df.groupby(["race_id", "lap_number"])["lap_time_ms"]
+            .agg(["median", "std"])
+            .reset_index()
+        )
         race_lap_stats.columns = ["race_id", "lap_number", "lap_median", "lap_std"]
 
         df = df.merge(race_lap_stats, on=["race_id", "lap_number"], how="left")

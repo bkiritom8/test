@@ -40,6 +40,7 @@ class BaseDistributionStrategy(ABC):
 
 # ── A) Data Parallel ─────────────────────────────────────────────────────────
 
+
 class DataParallelStrategy(BaseDistributionStrategy):
     """
     Splits race/lap data across multiple workers.
@@ -63,28 +64,31 @@ class DataParallelStrategy(BaseDistributionStrategy):
                 communication_options=options
             )
             logger.info(
-                "DataParallelStrategy: MultiWorkerMirroredStrategy, "
-                "num_workers=%d",
+                "DataParallelStrategy: MultiWorkerMirroredStrategy, " "num_workers=%d",
                 strategy.num_replicas_in_sync,
             )
         else:
             strategy = tf.distribute.MirroredStrategy()
             logger.info(
-                "DataParallelStrategy: MirroredStrategy, "
-                "num_replicas=%d",
+                "DataParallelStrategy: MirroredStrategy, " "num_replicas=%d",
                 strategy.num_replicas_in_sync,
             )
         return strategy
 
     def describe(self) -> dict[str, Any]:
         return {
-            "strategy": "MultiWorkerMirroredStrategy" if self.multi_worker else "MirroredStrategy",
+            "strategy": (
+                "MultiWorkerMirroredStrategy"
+                if self.multi_worker
+                else "MirroredStrategy"
+            ),
             "type": "data_parallel",
             "use_case": "F1 strategy model — split by season/race",
         }
 
 
 # ── B) Model Parallel ────────────────────────────────────────────────────────
+
 
 class ModelParallelStrategy(BaseDistributionStrategy):
     """
@@ -107,9 +111,7 @@ class ModelParallelStrategy(BaseDistributionStrategy):
         # ParameterServerStrategy is the closest TF equivalent for model parallelism.
         # Layer-level device placement is handled inside the model definition.
         cluster_resolver = tf.distribute.cluster_resolver.TFConfigClusterResolver()
-        strategy = tf.distribute.experimental.ParameterServerStrategy(
-            cluster_resolver
-        )
+        strategy = tf.distribute.experimental.ParameterServerStrategy(cluster_resolver)
         logger.info(
             "ModelParallelStrategy: ParameterServerStrategy, num_gpus=%d",
             self.num_gpus,
@@ -127,6 +129,7 @@ class ModelParallelStrategy(BaseDistributionStrategy):
 
 
 # ── C) Hyperparameter Parallel ───────────────────────────────────────────────
+
 
 class HyperparameterParallelStrategy(BaseDistributionStrategy):
     """

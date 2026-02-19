@@ -99,7 +99,9 @@ class FeatureStore:
         )
         logger.info(
             "FeatureStore: loaded %d rows for year=%d (%d races)",
-            len(df), year, df["race_id"].nunique() if len(df) > 0 else 0,
+            len(df),
+            year,
+            df["race_id"].nunique() if len(df) > 0 else 0,
         )
         return df
 
@@ -118,9 +120,7 @@ class FeatureStore:
             """,
             params=(driver_ref,),
         )
-        logger.info(
-            "FeatureStore: loaded %d rows for driver=%s", len(df), driver_ref
-        )
+        logger.info("FeatureStore: loaded %d rows for driver=%s", len(df), driver_ref)
         return df
 
     def load_telemetry_features(
@@ -142,14 +142,12 @@ class FeatureStore:
 
     def load_driver_profiles(self) -> pd.DataFrame:
         """Load driver profiles (aggregated per-driver statistics)."""
-        return self._query(
-            """
+        return self._query("""
             SELECT dp.*, d.driver_ref, d.nationality
             FROM driver_profiles dp
             JOIN drivers d USING (driver_id)
             ORDER BY d.driver_ref
-            """
-        )
+            """)
 
     def load_multi_season_features(
         self, years: list[int], include_telemetry: bool = False
@@ -168,9 +166,7 @@ class FeatureStore:
             """,
             params=tuple(years),
         )
-        logger.info(
-            "FeatureStore: loaded %d rows for years=%s", len(df), years
-        )
+        logger.info("FeatureStore: loaded %d rows for years=%s", len(df), years)
         return df
 
     # ── GCS write ─────────────────────────────────────────────────────────────
@@ -194,7 +190,9 @@ class FeatureStore:
         )
         logger.info(
             "FeatureStore: wrote %d rows (%.1f MB) to %s",
-            len(df), len(data) / 1e6, gcs_uri,
+            len(df),
+            len(data) / 1e6,
+            gcs_uri,
         )
         return gcs_uri
 

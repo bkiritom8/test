@@ -43,11 +43,15 @@ def train_pit_stop_op(
     topic_path = publisher.topic_path(project_id, "f1-predictions-dev")
 
     def publish(event: str, status: str, detail: str = "") -> None:
-        payload = json.dumps({
-            "event": event, "component": "train_pit_stop",
-            "status": status, "detail": detail,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }).encode()
+        payload = json.dumps(
+            {
+                "event": event,
+                "component": "train_pit_stop",
+                "status": status,
+                "detail": detail,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ).encode()
         publisher.publish(topic_path, data=payload)
 
     with open(feature_manifest.path) as f:
@@ -56,8 +60,7 @@ def train_pit_stop_op(
     publish("component_start", "running")
     logger.info("train_pit_stop: submitting CustomJob, run_id=%s", run_id)
 
-    aiplatform.init(project=project_id, location=region,
-                    staging_bucket=training_bucket)
+    aiplatform.init(project=project_id, location=region, staging_bucket=training_bucket)
 
     checkpoint_uri = f"{training_bucket.rstrip('/')}/checkpoints/{run_id}/pit_stop/"
 
@@ -65,11 +68,17 @@ def train_pit_stop_op(
         display_name=f"f1-pit-stop-train-{run_id}",
         worker_pool_specs=SINGLE_NODE_MULTI_GPU.worker_pool_specs(
             args=[
-                "python", "-m", "ml.models.pit_stop_optimizer",
-                "--mode", "train",
-                "--feature-uri", features["feature_uris"]["laps_features"],
-                "--checkpoint-uri", checkpoint_uri,
-                "--run-id", run_id,
+                "python",
+                "-m",
+                "ml.models.pit_stop_optimizer",
+                "--mode",
+                "train",
+                "--feature-uri",
+                features["feature_uris"]["laps_features"],
+                "--checkpoint-uri",
+                checkpoint_uri,
+                "--run-id",
+                run_id,
             ],
             env_vars={
                 "PROJECT_ID": project_id,
@@ -103,6 +112,5 @@ def train_pit_stop_op(
     with open(pit_stop_model.path, "w") as f:
         json.dump(model_meta, f, indent=2)
 
-    publish("component_complete", "success",
-            f"checkpoint_uri={checkpoint_uri}")
+    publish("component_complete", "success", f"checkpoint_uri={checkpoint_uri}")
     logger.info("train_pit_stop: DONE %s", model_meta)
