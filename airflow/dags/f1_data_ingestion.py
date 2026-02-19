@@ -28,8 +28,8 @@ from prometheus_client import Counter, Histogram, Gauge
 import sys
 sys.path.insert(0, '/opt/airflow/src')
 
-from ingestion.ergast_client import ErgastClient
-from ingestion.fastf1_client import FastF1Client
+from ingestion.ergast_ingestion import run_ingestion as _ergast_run
+from ingestion.fastf1_ingestion import run_ingestion as _fastf1_run
 
 # Configure logging
 logging.basicConfig(
@@ -166,128 +166,62 @@ def initialize_metrics(**context):
     logger.info(f"Initialized metrics for DAG run {run_id}")
 
 
-def ingest_ergast_seasons(**context):
-    """Ingest season data from Ergast API"""
+def ingest_ergast_data(**context):
+    """Ingest Ergast data (seasons, drivers, constructors, races) into Cloud SQL."""
     global metrics
     task_id = context['task'].task_id
     metrics.record_task_start(task_id)
 
     try:
-        client = ErgastClient()
-        seasons = client.get_seasons(start_year=1950, end_year=2024)
-
-        DATA_RECORDS_INGESTED.labels(
-            data_source='ergast',
-            data_type='seasons'
-        ).inc(len(seasons))
-
-        metrics.record_task_end(task_id, 'success', len(seasons))
-
-        # Push to XCom for downstream tasks
-        context['task_instance'].xcom_push(key='seasons', value=seasons)
-
-        logger.info(f"Ingested {len(seasons)} seasons from Ergast")
-        return {'seasons_count': len(seasons)}
-
-    except Exception as e:
-        metrics.record_task_end(task_id, 'failed')
-        logger.error(f"Failed to ingest seasons: {e}")
-        raise AirflowException(f"Ergast seasons ingestion failed: {e}")
-
-
-def ingest_ergast_drivers(**context):
-    """Ingest driver data from Ergast API"""
-    global metrics
-    task_id = context['task'].task_id
-    metrics.record_task_start(task_id)
-
-    try:
-        client = ErgastClient()
-        drivers = client.get_drivers()
-
-        DATA_RECORDS_INGESTED.labels(
-            data_source='ergast',
-            data_type='drivers'
-        ).inc(len(drivers))
-
-        metrics.record_task_end(task_id, 'success', len(drivers))
-
-        context['task_instance'].xcom_push(
-            key='drivers',
-            value=[d.dict() for d in drivers]
+        current_year = datetime.now().year
+        _ergast_run(
+            start_season=current_year - 1,
+            end_season=current_year,
+            worker_id="airflow-ergast",
         )
 
-        logger.info(f"Ingested {len(drivers)} drivers from Ergast")
-        return {'drivers_count': len(drivers)}
+        DATA_RECORDS_INGESTED.labels(
+            data_source='ergast',
+            data_type='all'
+        ).inc(1)
+
+        metrics.record_task_end(task_id, 'success')
+        logger.info("Ergast ingestion complete for %d-%d", current_year - 1, current_year)
+        return {'status': 'ok', 'seasons': f"{current_year - 1}-{current_year}"}
 
     except Exception as e:
         metrics.record_task_end(task_id, 'failed')
-        logger.error(f"Failed to ingest drivers: {e}")
-        raise AirflowException(f"Ergast drivers ingestion failed: {e}")
+        logger.error(f"Failed to ingest Ergast data: {e}")
+        raise AirflowException(f"Ergast ingestion failed: {e}")
 
 
-def ingest_ergast_races(**context):
-    """Ingest race data for recent seasons"""
+def ingest_fastf1_data(**context):
+    """Ingest FastF1 telemetry (lap features, weather, driver profiles) into Cloud SQL."""
     global metrics
     task_id = context['task'].task_id
     metrics.record_task_start(task_id)
 
     try:
-        # Get seasons from upstream task
-        seasons = context['task_instance'].xcom_pull(
-            task_ids='ingest_ergast_seasons',
-            key='seasons'
-        ) or [2023, 2024]  # Default to recent years
-
-        client = ErgastClient()
-        total_races = 0
-
-        for year in seasons[-2:]:  # Last 2 seasons for demo
-            races = client.get_races(year)
-            total_races += len(races)
-
-            DATA_RECORDS_INGESTED.labels(
-                data_source='ergast',
-                data_type='races'
-            ).inc(len(races))
-
-        metrics.record_task_end(task_id, 'success', total_races)
-
-        logger.info(f"Ingested {total_races} races from Ergast")
-        return {'races_count': total_races}
-
-    except Exception as e:
-        metrics.record_task_end(task_id, 'failed')
-        logger.error(f"Failed to ingest races: {e}")
-        raise AirflowException(f"Ergast races ingestion failed: {e}")
-
-
-def ingest_fastf1_events(**context):
-    """Ingest event schedule from FastF1"""
-    global metrics
-    task_id = context['task'].task_id
-    metrics.record_task_start(task_id)
-
-    try:
-        client = FastF1Client()
-        events = client.get_available_events(2024)
+        current_year = datetime.now().year
+        _fastf1_run(
+            start_year=current_year - 1,
+            end_year=current_year,
+            worker_id="airflow-fastf1",
+        )
 
         DATA_RECORDS_INGESTED.labels(
             data_source='fastf1',
-            data_type='events'
-        ).inc(len(events))
+            data_type='all'
+        ).inc(1)
 
-        metrics.record_task_end(task_id, 'success', len(events))
-
-        context['task_instance'].xcom_push(key='events', value=events)
-
-        logger.info(f"Ingested {len(events)} events from FastF1")
-        return {'events_count': len(events)}
+        metrics.record_task_end(task_id, 'success')
+        logger.info("FastF1 ingestion complete for %d-%d", current_year - 1, current_year)
+        return {'status': 'ok', 'years': f"{current_year - 1}-{current_year}"}
 
     except Exception as e:
         metrics.record_task_end(task_id, 'failed')
-        logger.error(f"Failed to ingest FastF1 events: {e}")
-        raise AirflowException(f"FastF1 events ingestion failed: {e}")
+        logger.error(f"Failed to ingest FastF1 data: {e}")
+        raise AirflowException(f"FastF1 ingestion failed: {e}")
 
 
 def verify_races_written(**context):
@@ -401,39 +335,23 @@ with dag:
         dag=dag
     )
 
-    # Ergast ingestion tasks
+    # Ergast ingestion task — writes directly to Cloud SQL (recent 2 seasons)
     with TaskGroup('ergast_ingestion', tooltip='Ingest data from Ergast API') as ergast_group:
-        ingest_seasons = PythonOperator(
-            task_id='ingest_ergast_seasons',
-            python_callable=ingest_ergast_seasons,
+        ingest_ergast = PythonOperator(
+            task_id='ingest_ergast_data',
+            python_callable=ingest_ergast_data,
             provide_context=True,
+            execution_timeout=timedelta(hours=2),
             dag=dag
         )
 
-        ingest_drivers = PythonOperator(
-            task_id='ingest_ergast_drivers',
-            python_callable=ingest_ergast_drivers,
-            provide_context=True,
-            dag=dag
-        )
-
-        ingest_races = PythonOperator(
-            task_id='ingest_ergast_races',
-            python_callable=ingest_ergast_races,
-            provide_context=True,
-            dag=dag
-        )
-
-        # Dependencies within group
-        ingest_seasons >> ingest_races
-        [ingest_seasons, ingest_drivers]
-
-    # FastF1 ingestion tasks
+    # FastF1 ingestion task — writes directly to Cloud SQL (recent 2 seasons)
     with TaskGroup('fastf1_ingestion', tooltip='Ingest data from FastF1') as fastf1_group:
-        ingest_events = PythonOperator(
-            task_id='ingest_fastf1_events',
-            python_callable=ingest_fastf1_events,
+        ingest_fastf1 = PythonOperator(
+            task_id='ingest_fastf1_data',
+            python_callable=ingest_fastf1_data,
             provide_context=True,
+            execution_timeout=timedelta(hours=2),
             dag=dag
         )
 

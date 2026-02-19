@@ -569,6 +569,23 @@ resource "google_service_account" "training_sa" {
   description  = "Service account for running Vertex AI custom training jobs"
 }
 
+# FastF1 session cache bucket — shared across ingestion workers to avoid re-downloading
+resource "google_storage_bucket" "fastf1_cache" {
+  name                        = "f1optimizer-fastf1-cache"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = false
+  labels                      = local.common_labels
+
+  depends_on = [google_project_service.required_apis]
+}
+
+resource "google_storage_bucket_iam_member" "fastf1_cache_ingestion_rw" {
+  bucket = google_storage_bucket.fastf1_cache.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
 resource "google_project_iam_member" "api_sa_aiplatform_user" {
   project = var.project_id
   role    = "roles/aiplatform.user"

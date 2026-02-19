@@ -17,6 +17,7 @@ import argparse
 import datetime
 import logging
 import os
+import subprocess
 import time
 from typing import Optional
 
@@ -28,10 +29,11 @@ from src.database.connection import ManagedConnection
 logger = logging.getLogger(__name__)
 
 FASTF1_CACHE = os.environ.get("FASTF1_CACHE", "/tmp/fastf1_cache")
+GCS_CACHE_BUCKET = os.environ.get("FASTF1_GCS_CACHE", "gs://f1optimizer-fastf1-cache")
 START_YEAR = 2018
-_SESSION_DELAY = 5.0  # seconds between every session download
-_LONG_SLEEP_EVERY = 10  # sessions between long pauses
-_LONG_SLEEP_SECONDS = 30  # seconds to pause every _LONG_SLEEP_EVERY sessions
+_SESSION_DELAY = 1.0  # seconds between every session download
+_LONG_SLEEP_EVERY = 20  # sessions between long pauses
+_LONG_SLEEP_SECONDS = 10  # seconds to pause every _LONG_SLEEP_EVERY sessions
 _SESSION_TYPES = ["Q", "R"]  # Qualifying + Race only (skips FP1/FP2/FP3/Sprint)
 
 
@@ -39,6 +41,46 @@ def _setup_cache() -> None:
     os.makedirs(FASTF1_CACHE, exist_ok=True)
     fastf1.Cache.enable_cache(FASTF1_CACHE)
     logger.info("FastF1 cache: %s", FASTF1_CACHE)
+
+
+def _sync_cache_from_gcs() -> None:
+    """Download cached session files from GCS before ingestion starts."""
+    try:
+        result = subprocess.run(
+            ["gsutil", "-m", "rsync", "-r", GCS_CACHE_BUCKET, FASTF1_CACHE],
+            capture_output=True,
+            timeout=300,
+        )
+        if result.returncode == 0:
+            logger.info("FastF1 cache synced from GCS: %s", GCS_CACHE_BUCKET)
+        else:
+            logger.warning(
+                "gsutil sync from GCS failed (rc=%d): %s",
+                result.returncode,
+                result.stderr.decode(errors="replace"),
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        logger.warning("GCS cache sync skipped: %s", exc)
+
+
+def _sync_cache_to_gcs() -> None:
+    """Upload cached session files to GCS after ingestion completes."""
+    try:
+        result = subprocess.run(
+            ["gsutil", "-m", "rsync", "-r", FASTF1_CACHE, GCS_CACHE_BUCKET],
+            capture_output=True,
+            timeout=600,
+        )
+        if result.returncode == 0:
+            logger.info("FastF1 cache uploaded to GCS: %s", GCS_CACHE_BUCKET)
+        else:
+            logger.warning(
+                "gsutil upload to GCS failed (rc=%d): %s",
+                result.returncode,
+                result.stderr.decode(errors="replace"),
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        logger.warning("GCS cache upload skipped: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -347,8 +389,9 @@ def run_ingestion(
     """
     current_year = end_year or datetime.date.today().year
     _setup_cache()
+    _sync_cache_from_gcs()
     logger.info(
-        "[%s] Starting FastF1 ingestion %d–%d", worker_id, start_year, current_year
+        "[%s] Starting FastF1 ingestion %d-%d", worker_id, start_year, current_year
     )
 
     session_count = 0
@@ -410,6 +453,7 @@ def run_ingestion(
         conn.run("COMMIT")
         logger.info("[%s] COMMIT OK:Committed: driver profiles", worker_id)
 
+    _sync_cache_to_gcs()
     logger.info("[%s] FastF1 ingestion complete", worker_id)
 
 
