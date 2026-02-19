@@ -197,6 +197,7 @@ cython_debug/
 terraform.tfstate
 terraform.tfstate.backup
 *.tfplan
+.workbench_zone
 crash.log
 *.tfvars
 

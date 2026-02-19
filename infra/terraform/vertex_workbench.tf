@@ -13,7 +13,7 @@ resource "google_project_service" "notebooks_api" {
 
 resource "google_workbench_instance" "f1_ml_workbench" {
   name     = "f1-ml-workbench"
-  location = "${var.region}-b" # zone required for Workbench
+  location = trimspace(data.local_file.workbench_zone.content) # dynamic zone
 
   gce_setup {
     machine_type = "n1-standard-4"
