@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os
 
-import kfp
 from kfp import dsl
 
 from ml.dag.components import (

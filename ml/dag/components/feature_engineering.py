@@ -34,7 +34,6 @@ def feature_engineering_op(
     import os
     from datetime import datetime, timezone
 
-    import numpy as np
     import pandas as pd
     from google.cloud import logging as cloud_logging, pubsub_v1, storage
     from google.cloud.sql.connector import Connector

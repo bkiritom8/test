@@ -21,7 +21,6 @@ Can also be triggered via:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import tempfile
@@ -76,7 +75,7 @@ def submit_pipeline(
     aiplatform.init(
         project=PROJECT_ID,
         location=REGION,
-        staging_bucket=f"gs://f1optimizer-training",
+        staging_bucket="gs://f1optimizer-training",
     )
 
     job = aiplatform.PipelineJob(

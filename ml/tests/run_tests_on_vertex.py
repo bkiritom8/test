@@ -53,7 +53,7 @@ def run_tests_locally(test_path: str) -> tuple[int, str]:
             "-v",
             "--tb=short",
             "--no-header",
-            f"--junitxml=/tmp/test_results.xml",
+            "--junitxml=/tmp/test_results.xml",
         ],
         capture_output=True,
         text=True,
@@ -180,7 +180,7 @@ def main() -> None:
             args.test_path, args.run_id,
         )
         try:
-            job = submit_test_job(args.test_path, args.run_id)
+            submit_test_job(args.test_path, args.run_id)
             logger.info(
                 "Test job completed. Check results at:\n"
                 "  https://console.cloud.google.com/vertex-ai/training/custom-jobs"

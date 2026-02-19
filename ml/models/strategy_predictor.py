@@ -31,7 +31,6 @@ import argparse
 import json
 import logging
 import os
-import tempfile
 from typing import Any
 
 import lightgbm as lgb

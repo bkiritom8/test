@@ -18,7 +18,6 @@ import pytest
 def dummy_laps() -> pd.DataFrame:
     """Minimal lap features DataFrame resembling Cloud SQL output."""
     rng = np.random.default_rng(42)
-    n = 300  # 3 drivers × 100 laps
 
     drivers = [1, 2, 3]
     laps_per_driver = 100

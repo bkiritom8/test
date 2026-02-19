@@ -21,11 +21,8 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import os
-from typing import Any
 
-import numpy as np
 import pandas as pd
 from google.cloud import storage
 from google.cloud.sql.connector import Connector

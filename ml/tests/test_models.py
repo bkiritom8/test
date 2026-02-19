@@ -10,7 +10,6 @@ All tests run on Vertex AI (n1-standard-4, no GPU).
 GCS calls are intercepted via unittest.mock — no actual GCS uploads.
 """
 
-import json
 import os
 import tempfile
 from unittest.mock import MagicMock, patch

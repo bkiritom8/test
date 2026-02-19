@@ -35,7 +35,6 @@ def evaluate_op(
     import logging
     from datetime import datetime, timezone
 
-    import numpy as np
     import pandas as pd
     from google.cloud import aiplatform, logging as cloud_logging, pubsub_v1, storage
 

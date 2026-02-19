@@ -83,7 +83,6 @@ def deploy_op(
         logger.info("deploy: %s promoted to %s", model_name, model_uri)
 
     # ── Update Cloud Run to pick up new model versions ────────────────────────
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     cmd = [
         "gcloud", "run", "services", "update", cloud_run_service,
         "--region", region,

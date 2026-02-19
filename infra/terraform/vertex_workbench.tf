@@ -24,9 +24,9 @@ resource "google_workbench_instance" "f1_ml_workbench" {
 
     # Pull startup script from GCS on every boot
     metadata = {
-      startup-script-url        = "gs://f1optimizer-training/startup/workbench_startup.sh"
-      idle-timeout-seconds      = "3600" # 60-minute auto-shutdown
-      install-nvidia-driver     = "true"
+      startup-script-url    = "gs://f1optimizer-training/startup/workbench_startup.sh"
+      idle-timeout-seconds  = "3600" # 60-minute auto-shutdown
+      install-nvidia-driver = "true"
     }
 
     boot_disk {

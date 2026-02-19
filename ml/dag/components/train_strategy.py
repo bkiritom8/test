@@ -30,7 +30,6 @@ def train_strategy_op(
     """
     import json
     import logging
-    import os
     from datetime import datetime, timezone
 
     from google.cloud import aiplatform, logging as cloud_logging, pubsub_v1

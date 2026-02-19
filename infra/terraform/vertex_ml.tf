@@ -10,9 +10,9 @@
 
 resource "google_project_service" "ml_apis" {
   for_each = toset([
-    "notebooks.googleapis.com",          # Vertex AI Workbench
-    "workbench.googleapis.com",          # Managed notebook instances
-    "ml.googleapis.com",                 # Vertex AI (legacy ML Engine alias)
+    "notebooks.googleapis.com", # Vertex AI Workbench
+    "workbench.googleapis.com", # Managed notebook instances
+    "ml.googleapis.com",        # Vertex AI (legacy ML Engine alias)
   ])
 
   service            = each.value
@@ -44,7 +44,7 @@ resource "google_storage_bucket" "pipeline_runs" {
     }
   }
 
-  labels = local.common_labels
+  labels     = local.common_labels
   depends_on = [google_project_service.required_apis]
 }
 
@@ -54,9 +54,9 @@ locals {
   pipeline_sa_extra_roles = [
     "roles/aiplatform.user",
     "roles/aiplatform.viewer",
-    "roles/ml.developer",               # Vertex AI custom training
-    "roles/iam.serviceAccountUser",     # impersonate self when launching jobs
-    "roles/run.invoker",                # trigger Cloud Run jobs from pipeline
+    "roles/ml.developer",           # Vertex AI custom training
+    "roles/iam.serviceAccountUser", # impersonate self when launching jobs
+    "roles/run.invoker",            # trigger Cloud Run jobs from pipeline
   ]
 }
 
@@ -81,7 +81,7 @@ resource "google_cloud_run_v2_job" "f1_pipeline_trigger" {
 
   template {
     template {
-      timeout         = "900s"   # compile + submit only; pipeline runs async
+      timeout         = "900s" # compile + submit only; pipeline runs async
       service_account = google_service_account.training_sa.email
 
       containers {

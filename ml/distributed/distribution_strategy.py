@@ -18,7 +18,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import tensorflow as tf
-from google.cloud import aiplatform
 
 logger = logging.getLogger(__name__)
 

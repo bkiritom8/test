@@ -157,7 +157,6 @@ class TestPipelineRunnerCLI:
 
     def test_compile_only_flag(self):
         import argparse
-        import sys
         from unittest.mock import patch
 
         with patch("sys.argv", ["pipeline_runner.py", "--compile-only"]):
