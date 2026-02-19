@@ -221,9 +221,19 @@ async def recommend_strategy(
             recommended_action = "PIT_SOON" if pred > 0.5 else "CONTINUE"
             recommendation = StrategyRecommendation(
                 recommended_action=recommended_action,
-                pit_window_start=request.current_lap + 1 if recommended_action == "PIT_SOON" else None,
-                pit_window_end=request.current_lap + 5 if recommended_action == "PIT_SOON" else None,
-                target_compound="HARD" if request.current_compound == "MEDIUM" else "SOFT",
+                pit_window_start=(
+                    request.current_lap + 1
+                    if recommended_action == "PIT_SOON"
+                    else None
+                ),
+                pit_window_end=(
+                    request.current_lap + 5
+                    if recommended_action == "PIT_SOON"
+                    else None
+                ),
+                target_compound=(
+                    "HARD" if request.current_compound == "MEDIUM" else "SOFT"
+                ),
                 driving_mode="BALANCED",
                 brake_bias=52.5,
                 confidence=float(abs(pred - 0.5) * 2),
@@ -231,10 +241,14 @@ async def recommend_strategy(
             )
         else:
             recommendation = StrategyRecommendation(
-                recommended_action="CONTINUE" if request.current_lap < 30 else "PIT_SOON",
+                recommended_action=(
+                    "CONTINUE" if request.current_lap < 30 else "PIT_SOON"
+                ),
                 pit_window_start=30 if request.current_lap < 30 else None,
                 pit_window_end=35 if request.current_lap < 30 else None,
-                target_compound="HARD" if request.current_compound == "MEDIUM" else "SOFT",
+                target_compound=(
+                    "HARD" if request.current_compound == "MEDIUM" else "SOFT"
+                ),
                 driving_mode="BALANCED",
                 brake_bias=52.5,
                 confidence=0.87,
@@ -305,8 +319,16 @@ async def get_drivers(
     except Exception as e:
         logger.warning("DB unavailable for /data/drivers, returning fallback: %s", e)
         drivers = [
-            {"driver_id": "max_verstappen", "name": "Max Verstappen", "nationality": "Dutch"},
-            {"driver_id": "lewis_hamilton", "name": "Lewis Hamilton", "nationality": "British"},
+            {
+                "driver_id": "max_verstappen",
+                "name": "Max Verstappen",
+                "nationality": "Dutch",
+            },
+            {
+                "driver_id": "lewis_hamilton",
+                "name": "Lewis Hamilton",
+                "nationality": "British",
+            },
         ]
 
     REQUEST_COUNT.labels(method="GET", endpoint="/data/drivers", status="200").inc()
@@ -397,7 +419,9 @@ async def startup_event():
             _models_loaded_from_gcs = True
             logger.info("ML model loaded from GCS: strategy_predictor/latest/model.pkl")
         else:
-            logger.warning("No ML model found at strategy_predictor/latest/model.pkl — using rule-based fallback")
+            logger.warning(
+                "No ML model found at strategy_predictor/latest/model.pkl — using rule-based fallback"
+            )
     except Exception as e:
         logger.warning("Model load failed, using rule-based fallback: %s", e)
 
