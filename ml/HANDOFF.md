@@ -67,8 +67,8 @@
 | Cloud Run Job — pipeline trigger | `f1-pipeline-trigger` |
 | Training SA | `f1-training-dev@f1optimizer.iam.gserviceaccount.com` |
 | Artifact Registry | `us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/` |
-| GCS — raw source data | `gs://f1optimizer-data-lake/raw/` |
-| GCS — processed Parquet | `gs://f1optimizer-data-lake/processed/` |
+| GCS — raw source data | `gs://f1optimizer-data-lake/raw/` — 51 files, 6.0 GB |
+| GCS — processed Parquet | `gs://f1optimizer-data-lake/processed/` — 10 files, 1.0 GB |
 | GCS — training artifacts | `gs://f1optimizer-training/` |
 | GCS — promoted models | `gs://f1optimizer-models/` |
 | GCS — pipeline run roots | `gs://f1optimizer-pipeline-runs/` |
@@ -95,12 +95,27 @@
 
 All F1 data lives in GCS — there is no database.
 
-| Path | Contents |
-|---|---|
-| `gs://f1optimizer-data-lake/raw/` | Source CSVs from Jolpica API and FastF1 |
-| `gs://f1optimizer-data-lake/processed/` | Parquet files ready for ML training |
-| `gs://f1optimizer-models/` | Promoted model artifacts (e.g. `strategy_predictor/latest/model.pkl`) |
-| `gs://f1optimizer-training/` | Checkpoints, feature exports, pipeline run artefacts |
+| Path | Files | Size | Contents |
+|---|---|---|---|
+| `gs://f1optimizer-data-lake/raw/` | 51 | 6.0 GB | Source CSVs from Jolpica API and FastF1 |
+| `gs://f1optimizer-data-lake/processed/` | 10 | 1.0 GB | Parquet files ready for ML training |
+| `gs://f1optimizer-models/` | — | — | Promoted model artifacts |
+| `gs://f1optimizer-training/` | — | — | Checkpoints, feature exports, pipeline artefacts |
+
+### Processed Parquet files
+
+| File | Rows | Description |
+|---|---|---|
+| `processed/laps_all.parquet` | 93,372 | laps_1996 … laps_2025 combined |
+| `processed/telemetry_all.parquet` | 30,477,110 | telemetry_2018 … telemetry_2025 combined |
+| `processed/telemetry_laps_all.parquet` | 92,242 | FastF1 telemetry-session laps combined |
+| `processed/circuits.parquet` | 78 | F1 circuit master list |
+| `processed/drivers.parquet` | 100 | Driver master list |
+| `processed/pit_stops.parquet` | 11,077 | Pit stop records |
+| `processed/race_results.parquet` | 7,600 | Race results 1950-2026 |
+| `processed/lap_times.parquet` | 56,720 | Aggregated lap times |
+| `processed/fastf1_laps.parquet` | 92,242 | FastF1 lap data (2018-2026) |
+| `processed/fastf1_telemetry.parquet` | 90,302 | FastF1 telemetry summary |
 
 ### Reading data in Python
 
@@ -108,9 +123,10 @@ All F1 data lives in GCS — there is no database.
 import pandas as pd
 
 # Read processed Parquet directly from GCS (ADC credentials required — see DEV_SETUP.md §2)
-races  = pd.read_parquet("gs://f1optimizer-data-lake/processed/races.parquet")
-laps   = pd.read_parquet("gs://f1optimizer-data-lake/processed/laps.parquet")
-drivers = pd.read_parquet("gs://f1optimizer-data-lake/processed/drivers.parquet")
+laps         = pd.read_parquet("gs://f1optimizer-data-lake/processed/laps_all.parquet")
+telemetry    = pd.read_parquet("gs://f1optimizer-data-lake/processed/telemetry_all.parquet")
+circuits     = pd.read_parquet("gs://f1optimizer-data-lake/processed/circuits.parquet")
+race_results = pd.read_parquet("gs://f1optimizer-data-lake/processed/race_results.parquet")
 ```
 
 ### Converting raw CSVs to Parquet

@@ -76,20 +76,37 @@ All F1 data is stored in GCS — there is no database.
 
 | Bucket | Path | Contents |
 |---|---|---|
-| `gs://f1optimizer-data-lake/raw/` | Source data | CSVs from Jolpica API and FastF1 |
-| `gs://f1optimizer-data-lake/processed/` | ML-ready data | Parquet files for training |
+| `gs://f1optimizer-data-lake/raw/` | Source CSVs | 51 files, 6.0 GB — Jolpica API + FastF1 |
+| `gs://f1optimizer-data-lake/processed/` | Parquet | 10 files, 1.0 GB — ML-ready, compressed |
 | `gs://f1optimizer-models/` | Promoted models | `strategy_predictor/latest/model.pkl` etc. |
 | `gs://f1optimizer-training/` | Training artifacts | Checkpoints, feature files, pipeline runs |
+
+### Processed Parquet files
+
+| GCS Path | Rows | Description |
+|---|---|---|
+| `processed/laps_all.parquet` | 93,372 | laps_1996.csv … laps_2025.csv combined |
+| `processed/telemetry_all.parquet` | 30,477,110 | telemetry_2018 … telemetry_2025 combined |
+| `processed/telemetry_laps_all.parquet` | 92,242 | FastF1 telemetry-session laps combined |
+| `processed/circuits.parquet` | 78 | F1 circuit master list |
+| `processed/drivers.parquet` | 100 | Driver master list |
+| `processed/pit_stops.parquet` | 11,077 | Pit stop records |
+| `processed/race_results.parquet` | 7,600 | Race results 1950-2026 |
+| `processed/lap_times.parquet` | 56,720 | Aggregated lap times |
+| `processed/fastf1_laps.parquet` | 92,242 | FastF1 lap data (2018-2026) |
+| `processed/fastf1_telemetry.parquet` | 90,302 | FastF1 telemetry summary |
 
 ### Reading processed data in Python
 
 ```python
 import pandas as pd
 
-# Read a processed Parquet file directly from GCS
-df = pd.read_parquet("gs://f1optimizer-data-lake/processed/races.parquet")
-df = pd.read_parquet("gs://f1optimizer-data-lake/processed/laps.parquet")
-df = pd.read_parquet("gs://f1optimizer-data-lake/processed/drivers.parquet")
+# Read processed Parquet files directly from GCS (ADC credentials required — see §2)
+laps         = pd.read_parquet("gs://f1optimizer-data-lake/processed/laps_all.parquet")
+telemetry    = pd.read_parquet("gs://f1optimizer-data-lake/processed/telemetry_all.parquet")
+circuits     = pd.read_parquet("gs://f1optimizer-data-lake/processed/circuits.parquet")
+drivers      = pd.read_parquet("gs://f1optimizer-data-lake/processed/drivers.parquet")
+race_results = pd.read_parquet("gs://f1optimizer-data-lake/processed/race_results.parquet")
 ```
 
 ADC credentials (§2) are all that is required — no proxy or VPN needed.

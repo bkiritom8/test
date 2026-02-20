@@ -2,7 +2,7 @@
 
 **Date**: 2026-02-19
 **Project**: `f1optimizer` (GCP, `us-central1`)
-**Repo**: `bkiritom8/test` | Branch: `main`
+**Repo**: `bkiritom8/F1-Strategy-Optimizer` | Branch: `pipeline`
 **Connection name**: `f1optimizer:us-central1:f1-optimizer-dev`
 
 ---
