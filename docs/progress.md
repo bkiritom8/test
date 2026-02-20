@@ -262,6 +262,34 @@ Full ML team handoff — repo restructured into clean domain separation, distrib
 
 ---
 
+## Session 2026-02-19 — GPU Training Infra, Dev Setup, Image Builds, Workbench Fix
+
+**Date**: 2026-02-19
+**Participants**: Claude Code
+
+**Completed**:
+- Built and pushed all 3 Docker images (api:latest, ingestion:latest, ml:latest) via Cloud Build (build `2e867ccb`, SUCCESS)
+- Fixed Workbench: hardcoded zone to `us-central1-a`, kept 150 GB SSD boot disk (minimum for Workbench image), switched data disk to PD_STANDARD to avoid SSD_TOTAL_GB quota (limit 250 GB in us-central1)
+- Full `terraform apply`: 11 added, 1 changed, 5 destroyed. All Cloud Run jobs + service deployed. API live at `https://f1-strategy-api-dev-lu32hl5eqa-uc.a.run.app`
+- Added `VERTEX_T4` profile to `ml/distributed/cluster_config.py` (n1-standard-4 + 1× T4)
+- Created `ml/scripts/submit_training_job.sh` — submit Vertex AI Custom Job with T4 GPU; accepts `--display-name` per teammate
+- Created `DEV_SETUP.md` — full dev onboarding guide (auth, Cloud SQL proxy, GCS, Docker, Vertex training, Colab Enterprise, env vars)
+- Updated `ML_HANDOFF.md` §12 GPU Training section; added VERTEX_T4 to compute profiles table; updated repo structure
+- Enabled `notebooks.googleapis.com` for Colab Enterprise
+- Triggered ingestion job `f1-data-ingestion-snx26` to repopulate Cloud SQL
+- Pushed all commits to `main` (commit `6dc0327`)
+
+**Decisions**:
+- Use PD_STANDARD for Workbench data disk (not PD_SSD) to stay within 250 GB SSD quota
+- Hardcode Workbench zone to `us-central1-a` instead of dynamic script to avoid zone availability race conditions
+- VERTEX_T4 profile is the default for individual ML experiments; SINGLE_NODE_MULTI_GPU for full production runs
+
+**Next Steps**:
+- Implement `predict()` in strategy_predictor.py and pit_stop_optimizer.py (raises NotImplementedError, API uses rule-based fallback)
+- Add `ray[default]==2.9.1` to `docker/requirements-ml.txt` or replace Ray usage with TF MirroredStrategy
+- Verify ingestion job completes successfully (`f1-data-ingestion-snx26`)
+- Run first ML training pipeline: `bash ml/scripts/run_training.sh`
+
 **End of Progress Log**
 
 ---
