@@ -92,7 +92,7 @@ def evaluate_op(
     elif model_name == "pit_stop_optimizer":
         from ml.models.pit_stop_optimizer import PitStopOptimizer
 
-        model = PitStopOptimizer()
+        model = PitStopOptimizer()  # type: ignore[assignment]
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
 

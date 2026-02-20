@@ -105,7 +105,7 @@ class TestDataSharding:
         from ml.distributed.data_sharding import DataSharding
 
         sharding = DataSharding(num_workers=num_workers)
-        sharding._fetch_all_race_ids = MagicMock(return_value=mock_race_ids)
+        sharding._fetch_all_race_ids = MagicMock(return_value=mock_race_ids)  # type: ignore[method-assign]
         return sharding
 
     def test_shards_are_disjoint(self):

@@ -20,7 +20,6 @@ import json
 import sys
 import time
 import urllib.parse
-from typing import Optional
 
 import google.auth
 import google.auth.transport.requests

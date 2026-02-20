@@ -13,7 +13,7 @@ Features:
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import psycopg2
 
@@ -142,7 +142,7 @@ class OperationalMetrics:
 
 
 # Global metrics instance (will be created per DAG run)
-metrics: OperationalMetrics = None
+metrics: Optional[OperationalMetrics] = None
 
 
 def initialize_metrics(**context):

@@ -277,6 +277,8 @@ class PitStopOptimizer(BaseF1Model):
         return out
 
     def evaluate(self, df: pd.DataFrame) -> dict[str, float]:
+        if self._keras_model is None:
+            raise RuntimeError("Model is not trained. Call train() first.")
         df = self._prepare(df, fit=False)
         seq_X, static_X, y = self._to_sequences(df)
         preds = self._keras_model.predict([seq_X, static_X], verbose=0).flatten()

@@ -6,7 +6,6 @@ Creates tables, indexes, and sample data for local development
 
 import logging
 from pathlib import Path
-from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
