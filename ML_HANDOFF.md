@@ -20,6 +20,7 @@
 9. [Compute Profiles](#9-compute-profiles)
 10. [Known Gaps and Proposed Fixes](#10-known-gaps-and-proposed-fixes)
 11. [Day 1 Quickstart](#11-day-1-quickstart)
+12. [GPU Training](#12-gpu-training)
 
 ---
 
@@ -253,7 +254,8 @@ ml/
 │   └── aggregator.py           # Metric aggregation
 │
 ├── scripts/
-│   └── run_training.sh         # Compile + submit KFP pipeline (see §8)
+│   ├── run_training.sh         # Compile + submit KFP pipeline (see §8)
+│   └── submit_training_job.sh  # Submit Vertex AI Custom Job with T4 GPU (see §12)
 │
 ├── training/
 │   └── distributed_trainer.py  # Ray-based distributed trainer (see gap M1)
@@ -337,10 +339,11 @@ Defined in `ml/distributed/cluster_config.py`:
 
 | Config | Machine | GPUs | Workers | Use Case |
 |---|---|---|---|---|
+| `VERTEX_T4` | `n1-standard-4` | 1× T4 | 1 | Individual experiment (see §12) |
 | `SINGLE_NODE_MULTI_GPU` | `n1-standard-16` | 4× T4 | 1 | Standard training run |
 | `MULTI_NODE_DATA_PARALLEL` | `n1-standard-8` | 1× T4 each | 4 | Large dataset sharding |
 | `HYPERPARAMETER_SEARCH` | `n1-standard-4` | 0 | 8 | HP sweep (XGBoost/LightGBM) |
-| `CPU_DISTRIBUTED` | `n1-standard-8` | 0 | 4 | Feature engineering only |
+| `CPU_DISTRIBUTED` | `n1-highmem-16` | 0 | 8 | Feature engineering only |
 
 ---
 
@@ -474,6 +477,108 @@ python ml/tests/run_tests_on_vertex.py
 gcloud run jobs execute f1-ingestion-monitor \
   --region=us-central1 --project=f1optimizer
 ```
+
+---
+
+## 12. GPU Training
+
+Two approaches for running GPU training jobs — use whichever fits your workflow.
+
+### Option A — Vertex AI Custom Job (recommended)
+
+Submit a job using the convenience script. Each teammate names their own run:
+
+```bash
+bash ml/scripts/submit_training_job.sh --display-name alice-strategy-v1
+```
+
+**What it provisions:**
+- Machine: `n1-standard-4` (4 vCPU, 15 GB RAM)
+- GPU: 1× NVIDIA T4
+- Image: `us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ml:latest`
+- SA: `f1-training-dev@f1optimizer.iam.gserviceaccount.com`
+- Region: `us-central1`
+
+**Monitor:**
+
+```bash
+# List your jobs
+gcloud ai custom-jobs list \
+  --region=us-central1 --project=f1optimizer \
+  --filter="displayName:alice*"
+
+# Stream logs
+gcloud ai custom-jobs stream-logs JOB_ID \
+  --region=us-central1 --project=f1optimizer
+```
+
+Console: https://console.cloud.google.com/vertex-ai/training/custom-jobs?project=f1optimizer
+
+**Programmatic (Python):**
+
+```python
+from ml.distributed.cluster_config import VERTEX_T4
+from google.cloud import aiplatform
+
+aiplatform.init(project="f1optimizer", location="us-central1")
+job = aiplatform.CustomJob(
+    display_name="alice-strategy-v1",
+    worker_pool_specs=VERTEX_T4.worker_pool_specs(
+        args=["python", "-m", "ml.models.strategy_predictor", "--mode", "train",
+              "--training-bucket", "gs://f1optimizer-training",
+              "--models-bucket", "gs://f1optimizer-models"]
+    ),
+)
+job.run(service_account="f1-training-dev@f1optimizer.iam.gserviceaccount.com")
+```
+
+**VERTEX_T4 profile** (`ml/distributed/cluster_config.py`):
+
+| Field | Value |
+|---|---|
+| Machine | `n1-standard-4` |
+| GPU | 1× `NVIDIA_TESLA_T4` |
+| Workers | 1 |
+| Strategy | `MirroredStrategy` |
+
+### Option B — Colab Enterprise (interactive GPU notebook)
+
+Colab Enterprise gives you an interactive GPU session inside the GCP project with zero setup.
+
+1. Open: https://console.cloud.google.com/colab/notebooks?project=f1optimizer
+2. **New notebook** → **Runtime** → **Change runtime type** → select **T4 GPU**
+3. Clone the repo and install dependencies:
+
+```python
+import subprocess, sys
+subprocess.run(["git", "clone", "https://github.com/bkiritom8/test.git"], check=True)
+subprocess.run(["pip", "install", "-r", "test/requirements-f1.txt"], check=True)
+sys.path.insert(0, "/home/user/test")
+```
+
+4. Access GCS and Cloud SQL directly (no proxy needed — already inside VPC):
+
+```python
+from google.cloud import storage
+client = storage.Client(project="f1optimizer")
+```
+
+Colab Enterprise is ideal for:
+- Interactive model development and debugging
+- Quick experiments without the CLI setup overhead
+- Sharing notebooks with teammates via GCS
+
+### Compute profiles summary
+
+| Profile | Machine | GPU | Workers | Script / Config |
+|---|---|---|---|---|
+| `VERTEX_T4` | `n1-standard-4` | 1× T4 | 1 | `submit_training_job.sh` default |
+| `SINGLE_NODE_MULTI_GPU` | `n1-standard-16` | 4× T4 | 1 | Large single-node runs |
+| `MULTI_NODE_DATA_PARALLEL` | `n1-standard-8` | 1× T4 each | 4 | Distributed data parallel |
+| `HYPERPARAMETER_SEARCH` | `n1-standard-4` | 0 | 8 | XGBoost/LightGBM HP sweep |
+| `CPU_DISTRIBUTED` | `n1-highmem-16` | 0 | 8 | CPU-only feature engineering |
+
+All profiles are defined in `ml/distributed/cluster_config.py`.
 
 ---
 

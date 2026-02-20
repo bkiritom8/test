@@ -13,7 +13,7 @@ resource "google_project_service" "notebooks_api" {
 
 resource "google_workbench_instance" "f1_ml_workbench" {
   name     = "f1-ml-workbench"
-  location = trimspace(data.local_file.workbench_zone.content) # dynamic zone
+  location = "us-central1-a" # hardcoded to avoid GPU capacity race conditions
 
   gce_setup {
     machine_type = "n1-standard-4"
@@ -35,7 +35,7 @@ resource "google_workbench_instance" "f1_ml_workbench" {
 
     data_disks {
       disk_size_gb = 200
-      disk_type    = "PD_SSD"
+      disk_type    = "PD_STANDARD"
     }
   }
 
