@@ -253,7 +253,7 @@ resource "google_sql_database_instance" "f1_db" {
   name                = "f1-optimizer-${var.environment}"
   database_version    = "POSTGRES_15"
   region              = var.region
-  deletion_protection = true
+  deletion_protection = false
 
   settings {
     tier = "db-f1-micro"
@@ -284,10 +284,11 @@ resource "google_sql_database" "f1_data" {
 }
 
 resource "google_sql_user" "api_user" {
-  name     = "f1_api"
-  instance = google_sql_database_instance.f1_db.name
-  project  = var.project_id
-  password = random_password.db_password.result
+  name            = "f1_api"
+  instance        = google_sql_database_instance.f1_db.name
+  project         = var.project_id
+  password        = random_password.db_password.result
+  deletion_policy = "ABANDON"
 }
 
 resource "google_secret_manager_secret" "db_password" {
