@@ -12,18 +12,6 @@ steps:
       - "."
 
   - name: "gcr.io/cloud-builders/docker"
-    id: "build-ingestion"
-    args:
-      - "build"
-      - "--platform"
-      - "linux/amd64"
-      - "-t"
-      - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ingestion:latest"
-      - "-f"
-      - "docker/Dockerfile.ingestion"
-      - "."
-
-  - name: "gcr.io/cloud-builders/docker"
     id: "build-ml"
     args:
       - "build"
@@ -49,7 +37,7 @@ steps:
         else
           echo "Skipping zone selection — set _DEPLOY_WORKBENCH=true to deploy workbench"
         fi
-    waitFor: ["build-api", "build-ingestion", "build-ml"]
+    waitFor: ["build-api", "build-ml"]
 
   # Step 2: terraform init + apply targeting only the workbench instance
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -78,5 +66,4 @@ substitutions:
 
 images:
   - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/api:latest"
-  - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ingestion:latest"
   - "us-central1-docker.pkg.dev/f1optimizer/f1-optimizer/ml:latest"
