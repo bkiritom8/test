@@ -34,6 +34,34 @@ from google.cloud import storage
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+# Matches pandas timedelta repr: "0 days 00:01:39.019000" or "-1 days +23:58:20"
+_TIMEDELTA_RE = re.compile(r"^-?\d+ days [+\-]?\d{2}:\d{2}:\d{2}(\.\d+)?$")
+
+
+def fix_timedelta_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Detect columns containing pandas timedelta strings and convert to float seconds.
+
+    A column is considered a timedelta column if at least one value in a sample
+    drawn from across the full column matches '0 days 00:01:39.019000'.
+    Sampling across the column (not just head) catches columns where the first
+    rows happen to be NaN or numeric while timedelta strings appear later.
+    Non-parseable values become NaN.
+    """
+    for col in df.columns:
+        if df[col].dtype != object:
+            continue
+        non_null = df[col].dropna()
+        if non_null.empty:
+            continue
+        # Sample up to 50 values spread across the column to detect mixed columns
+        step = max(1, len(non_null) // 50)
+        sample = non_null.iloc[::step].head(50)
+        if sample.astype(str).str.match(_TIMEDELTA_RE).any():
+            logger.info("  Converting timedelta column '%s' to float seconds", col)
+            df[col] = pd.to_timedelta(df[col], errors="coerce").dt.total_seconds()
+    return df
+
+
 # Individual CSV stems to convert one-to-one
 INDIVIDUAL_FILES = [
     "circuits",
@@ -86,6 +114,7 @@ def convert_and_upload(input_dir: str, bucket_name: str) -> Dict[str, int]:
     if laps_csvs:
         logger.info("Combining %d laps_YYYY.csv files...", len(laps_csvs))
         df = _read_yearly_csvs(laps_csvs, "laps_all")
+        df = fix_timedelta_columns(df)
         _upload_df(df, bucket, f"{prefix}/laps_all.parquet")
         row_counts["laps_all"] = len(df)
     else:
@@ -101,6 +130,7 @@ def convert_and_upload(input_dir: str, bucket_name: str) -> Dict[str, int]:
                 "Combining %d telemetry/telemetry_YYYY.csv files...", len(tel_csvs)
             )
             df = _read_yearly_csvs(tel_csvs, "telemetry_all")
+            df = fix_timedelta_columns(df)
             _upload_df(df, bucket, f"{prefix}/telemetry_all.parquet")
             row_counts["telemetry_all"] = len(df)
 
@@ -111,6 +141,7 @@ def convert_and_upload(input_dir: str, bucket_name: str) -> Dict[str, int]:
                 "Combining %d telemetry/laps_YYYY.csv files...", len(tel_laps_csvs)
             )
             df = _read_yearly_csvs(tel_laps_csvs, "telemetry_laps_all")
+            df = fix_timedelta_columns(df)
             _upload_df(df, bucket, f"{prefix}/telemetry_laps_all.parquet")
             row_counts["telemetry_laps_all"] = len(df)
     else:
@@ -127,6 +158,7 @@ def convert_and_upload(input_dir: str, bucket_name: str) -> Dict[str, int]:
         )
         df = pd.read_csv(csv_path, low_memory=False)
         logger.info("  %s: %d rows", stem, len(df))
+        df = fix_timedelta_columns(df)
         _upload_df(df, bucket, f"{prefix}/{stem}.parquet")
         row_counts[stem] = len(df)
 
