@@ -10,7 +10,7 @@
 #   - Local development (docker-compose.f1.yml)
 #   - GCE VM production deployment (infra/terraform/airflow_vm.tf)
 
-FROM --platform=linux/amd64 apache/airflow:2.8.1-python3.10
+FROM apache/airflow:2.8.1-python3.10
 
 USER root
 
@@ -18,12 +18,14 @@ RUN mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/plugins \
     && chown -R airflow:root /opt/airflow
 
 COPY docker/requirements-airflow.txt /requirements-airflow.txt
+
+# apache/airflow image blocks pip when run as root — switch to airflow user first
+USER airflow
+
 RUN pip install --no-cache-dir -r /requirements-airflow.txt
 
-# Copy DAGs
-COPY Data-Pipeline/dags/ /opt/airflow/dags/
-
-USER airflow
+# Copy DAGs (COPY runs as build root; --chown sets file ownership inside image)
+COPY --chown=airflow:root Data-Pipeline/dags/ /opt/airflow/dags/
 
 EXPOSE 8080
 
