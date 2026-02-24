@@ -70,7 +70,10 @@ FastF1 (2018-2026)    ────┘              │
 ```
 ml/                    ML code — features, models, dag, distributed, tests
 Data-Pipeline/         Course submission — Airflow DAG, DVC pipeline, tests
-pipeline/scripts/      Data scripts (csv_to_parquet.py, verify_upload.py)
+pipeline/              Data management utilities
+  scripts/             csv_to_parquet.py, verify_upload.py
+  simulator/           Race simulator
+  rl/                  Reinforcement learning utilities
 infra/terraform/       All GCP infrastructure (Terraform)
   airflow_vm.tf        GCE VM for Airflow (e2-standard-2, Container-Optimized OS)
   scripts/             VM startup scripts
@@ -82,8 +85,11 @@ docker/                Dockerfiles + requirements
   Dockerfile.airflow   Airflow webserver + scheduler
   Dockerfile.mock-dataflow  Local Dataflow mock (dev only)
 src/                   Shared code
+  api/                 FastAPI application
+  common/              Logging, metrics, security utilities
   ingestion/           Jolpica + FastF1 ingestion clients
   mocks/               Local mock servers (dev only)
+  preprocessing/       Data validation (Pydantic schemas)
 tests/                 Unit + integration tests
 docs/                  Technical documentation
 team-docs/             Internal team docs (DEV_SETUP, handoffs)

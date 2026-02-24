@@ -26,14 +26,14 @@ FastF1 API  ──► src/ingestion/fastf1_ingestion.py ──► data/raw/fastf
                                 │
                 pipeline/scripts/csv_to_parquet.py
                                 │
-                        data/processed/  (Parquet)
+                    gs://f1optimizer-data-lake/processed/  (Parquet)
                                 │
               ┌─────────────────┼─────────────────┐
               ▼                 ▼                  ▼
     scripts/validate_data  scripts/anomaly_    ml/features/
-                           detection.py        feature_pipeline.py
-                                                    │
-                                            data/features/
+    logs/data_statistics   detection.py        feature_pipeline.py
+    scripts/expectations/  logs/anomaly_           │
+                           report.json         data/features/
                                                     │
                                    scripts/bias_analysis.py
                                                     │
@@ -49,22 +49,28 @@ Data-Pipeline/
 ├── dags/
 │   └── f1_pipeline.py          Airflow DAG (weekly, 7 tasks)
 ├── data/
-│   └── .gitkeep                Data lives in data/ at repo root (gitignored)
+│   └── .gitkeep                Local data directory (gitignored; GCS is the source of truth)
+├── logs/
+│   ├── .gitkeep
+│   └── gantt_chart.png         Generated at runtime (gitignored)
 ├── scripts/
-│   ├── validate_data.py        Schema + data quality validation
-│   ├── anomaly_detection.py    Outlier and missing-value detection
+│   ├── validate_data.py        Schema + data quality validation + statistics
+│   ├── anomaly_detection.py    Outlier and missing-value detection (Slack alerts)
 │   ├── bias_analysis.py        Representation bias via data slicing
 │   ├── generate_gantt.py       Gantt chart from task durations (PNG + ASCII)
+│   ├── deploy_dags.sh          Push DAG to GCS for GCE VM auto-sync
 │   └── expectations/
 │       └── .gitkeep            GE-style JSON suites written here at runtime
 ├── tests/
 │   ├── __init__.py
 │   ├── test_ingestion.py       Unit tests for Jolpica ingestion
-│   ├── test_csv_to_parquet.py  Unit tests for CSV conversion
-│   └── test_preprocessing.py  Unit tests for validation logic
-├── logs/
-│   └── .gitkeep                anomaly_report.json, bias_report.json, gantt_chart.png written here
-├── .env.example                Environment variable template (copy to .env)
+│   ├── test_csv_to_parquet.py  Unit tests for CSV → Parquet conversion
+│   ├── test_preprocessing.py   Unit tests for preprocessing logic
+│   ├── test_validator.py       Unit tests for Pydantic schema validator
+│   ├── test_anomaly_detection.py  Unit tests for anomaly detection
+│   ├── test_bias_analysis.py   Unit tests for bias analysis
+│   ├── test_fastf1_ingestion.py   Unit tests for FastF1 ingestion
+│   └── test_generate_gantt.py  Unit tests for Gantt chart generation
 ├── dvc.yaml                    Pipeline stages for this directory
 └── README.md                   This file
 ```
@@ -76,6 +82,8 @@ dvc.yaml                        Root-level DVC pipeline (full repo stages)
 src/ingestion/
 ├── ergast_ingestion.py         Jolpica API client
 └── fastf1_ingestion.py         FastF1 telemetry client
+src/preprocessing/
+└── validator.py                Pydantic schema validator (DataValidator)
 data/
 └── .gitignore                  Keeps data/ out of git (DVC manages it)
 docs/bias.md                    Bias findings and mitigation documentation
