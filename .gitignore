@@ -253,3 +253,10 @@ Data-Pipeline/logs/*.png
 airflow.db
 airflow/logs/
 airflow/plugins/
+
+data/raw/
+data/processed/
+*.ff1pkl
+*.sqlite
+Data-Pipeline/logs/*.json
+Data-Pipeline/logs/*.png
