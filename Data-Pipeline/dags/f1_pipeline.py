@@ -1,3 +1,11 @@
+# Deploy to Cloud Composer:
+# gsutil cp Data-Pipeline/dags/f1_pipeline.py gs://[composer-bucket]/dags/
+#
+# Required env vars (set in Cloud Composer → Environment variables):
+#   GCS_RAW        gs://f1optimizer-data-lake/raw
+#   GCS_PROCESSED  gs://f1optimizer-data-lake/processed
+#   DATA_BUCKET    f1optimizer-data-lake
+#   MODELS_BUCKET  f1optimizer-models
 """
 f1_pipeline.py — Airflow DAG for the F1 Strategy Optimizer data pipeline.
 
@@ -31,6 +39,15 @@ from airflow import DAG  # noqa: E402
 from airflow.operators.python import PythonOperator  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# GCS path configuration (all overridable via env vars or .env)
+# ---------------------------------------------------------------------------
+DATA_BUCKET = os.getenv("DATA_BUCKET", "data")
+MODELS_BUCKET = os.getenv("MODELS_BUCKET", "models")
+GCS_RAW = os.getenv("GCS_RAW", "gs://f1optimizer-data-lake/raw")
+GCS_PROCESSED = os.getenv("GCS_PROCESSED", "gs://f1optimizer-data-lake/processed")
+_USE_LOCAL = os.getenv("USE_LOCAL_DATA", "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Default arguments
@@ -194,8 +211,8 @@ def _preprocess(**context: object) -> dict:
         env = os.environ.copy()
         env["USE_LOCAL_DATA"] = "true"
 
-        # If GCS bucket env var is set, upload there; otherwise write locally
-        bucket = os.environ.get("GCS_BUCKET", "local")
+        # Use GCS_PROCESSED when running in GCP mode, otherwise write locally
+        bucket = "local" if _USE_LOCAL else GCS_PROCESSED
         cmd = [
             sys.executable,
             str(script),
@@ -267,11 +284,18 @@ def _build_features(**context: object) -> dict:
             "Processed Parquet files: %s",
             [p.name for p in processed_dir.glob("*.parquet")],
         )
-        # Feature pipeline reads from GCS by default; set USE_LOCAL_DATA to use local files
+        # Feature pipeline: local dir when USE_LOCAL_DATA=true, else GCS_PROCESSED
         env = os.environ.copy()
-        env["USE_LOCAL_DATA"] = "true"
-        env["LOCAL_DATA_DIR"] = str(processed_dir)
-        logger.info("build_features complete — output: %s", features_dir)
+        if _USE_LOCAL:
+            env["USE_LOCAL_DATA"] = "true"
+            env["LOCAL_DATA_DIR"] = str(processed_dir)
+        else:
+            env["GCS_PROCESSED"] = GCS_PROCESSED
+        logger.info(
+            "build_features complete — source: %s, output: %s",
+            GCS_PROCESSED if not _USE_LOCAL else str(processed_dir),
+            features_dir,
+        )
         return {"status": "ok", "output_dir": str(features_dir)}
     except Exception:
         logger.exception("build_features failed")

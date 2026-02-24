@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +45,10 @@ _SCRIPT_DIR = Path(__file__).parent
 _REPO_ROOT = _SCRIPT_DIR.parents[1]
 _EXPECTATIONS_DIR = _SCRIPT_DIR / "expectations"
 _EXPECTATIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Local fallback: Data-Pipeline/data/ when USE_LOCAL_DATA=true
+_USE_LOCAL = os.getenv("USE_LOCAL_DATA", "false").lower() == "true"
+_LOCAL_DATA_DIR = _SCRIPT_DIR.parent / "data"
 
 VALID_COMPOUNDS = {"SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"}
 
@@ -337,17 +342,20 @@ def run_validation(data_dir: Optional[str] = None) -> int:
     Returns exit code: 0 = all pass, 1 = critical failure.
     """
     if data_dir is None:
-        # Try local processed dir first, then GCS-downloaded
-        candidates = [
-            _REPO_ROOT / "data" / "processed",
-        ]
-        data_path = next((p for p in candidates if p.exists()), None)
-        if data_path is None:
-            logger.error(
-                "No processed data directory found. "
-                "Run `dvc repro preprocess` or provide --data-dir."
-            )
-            return 1
+        if _USE_LOCAL:
+            # Local mode: use Data-Pipeline/data/ (no GCS required)
+            data_path = _LOCAL_DATA_DIR
+            data_path.mkdir(parents=True, exist_ok=True)
+            logger.info("USE_LOCAL_DATA=true — reading from %s", data_path)
+        else:
+            candidates = [_REPO_ROOT / "data" / "processed"]
+            data_path = next((p for p in candidates if p.exists()), None)
+            if data_path is None:
+                logger.error(
+                    "No processed data directory found. "
+                    "Set USE_LOCAL_DATA=true or run `dvc repro preprocess`."
+                )
+                return 1
     else:
         data_path = Path(data_dir)
 

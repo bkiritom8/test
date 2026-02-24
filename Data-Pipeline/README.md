@@ -63,6 +63,7 @@ Data-Pipeline/
 │   └── test_preprocessing.py  Unit tests for validation logic
 ├── logs/
 │   └── .gitkeep                anomaly_report.json, bias_report.json written here
+├── .env.example                Environment variable template (copy to .env)
 ├── dvc.yaml                    Pipeline stages for this directory
 └── README.md                   This file
 ```
@@ -106,52 +107,66 @@ cd F1-Strategy-Optimizer
 # 2. Install dependencies
 pip install -r requirements-f1.txt
 
-# 3. (Optional) Initialize DVC with GCS remote
-dvc init
-dvc remote add -d gcs_remote gs://f1optimizer-data-lake
-dvc remote modify gcs_remote credentialpath ~/.config/gcloud/application_default_credentials.json
+# 3. Copy and edit env vars
+cp Data-Pipeline/.env.example Data-Pipeline/.env
+# Edit .env: set GCS paths or USE_LOCAL_DATA=true for local dev
 
-# 4. Pull existing processed data from GCS (if you have access)
-dvc pull
+# 4. (GCP only) Authenticate and configure DVC remote
+gcloud auth application-default login
+# DVC GCS remote is pre-configured in .dvc/config
+dvc pull   # pull processed data from gs://f1optimizer-data-lake/dvc-cache
 ```
 
 ---
 
 ## Running the Pipeline
 
-### Full pipeline (recommended — runs all stages in dependency order)
+### Local mode (no GCP required)
+
+Use `USE_LOCAL_DATA=true` to run entirely offline. Scripts read from `Data-Pipeline/data/`
+instead of GCS. Ideal for development and CI.
 
 ```bash
-dvc repro
+# Full pipeline (DVC)
+USE_LOCAL_DATA=true dvc repro
+
+# Or run scripts directly against local data
+export USE_LOCAL_DATA=true
+python Data-Pipeline/scripts/validate_data.py
+python Data-Pipeline/scripts/anomaly_detection.py
+python Data-Pipeline/scripts/bias_analysis.py
 ```
 
-### Individual stages
+### GCP mode (reads/writes GCS)
 
 ```bash
+# Authenticate first (see team-docs/DEV_SETUP.md §2)
+gcloud auth application-default login
+
+# Full pipeline — DVC uses gs://f1optimizer-data-lake/dvc-cache as remote
+dvc repro
+
+# Or individual stages
 dvc repro ingest_jolpica      # Fetch historical data from Jolpica API
 dvc repro ingest_fastf1       # Fetch telemetry from FastF1
-dvc repro preprocess          # Convert CSVs → Parquet
+dvc repro preprocess          # Convert CSVs → Parquet, upload to GCS_PROCESSED
 dvc repro validate            # Run schema validation
 dvc repro detect_anomalies    # Run anomaly detection
 dvc repro build_features      # Build ML feature vectors
 dvc repro bias_analysis       # Run bias analysis
 ```
 
-### Without GCP (local mode — using raw/ directory)
+Key env vars (see `.env.example`):
 
-```bash
-export USE_LOCAL_DATA=true
+| Variable | Default | Description |
+|---|---|---|
+| `GCS_RAW` | `gs://f1optimizer-data-lake/raw` | Raw data destination |
+| `GCS_PROCESSED` | `gs://f1optimizer-data-lake/processed` | Parquet output |
+| `USE_LOCAL_DATA` | `false` | Set `true` to skip GCS entirely |
+| `SLACK_WEBHOOK_URL` | _(empty)_ | Optional anomaly alerts |
+| `AIRFLOW__CORE__EXECUTOR` | `LocalExecutor` | Airflow executor |
 
-# If you have the raw CSVs locally in raw/
-python pipeline/scripts/csv_to_parquet.py --input-dir raw/ --bucket local
-
-# Then run validation directly
-python Data-Pipeline/scripts/validate_data.py --data-dir data/processed
-python Data-Pipeline/scripts/anomaly_detection.py --data-dir data/processed
-python Data-Pipeline/scripts/bias_analysis.py --data-dir data/processed
-```
-
-### Airflow
+### Airflow (local)
 
 ```bash
 # Initialize Airflow database
@@ -165,6 +180,34 @@ airflow webserver --port 8080 &
 airflow dags trigger f1_data_pipeline
 
 # Or use the web UI at http://localhost:8080
+```
+
+### Cloud Composer (GCP managed Airflow)
+
+```bash
+# 1. Find your Composer environment's GCS bucket
+gcloud composer environments describe f1-composer-env \
+  --location=us-central1 --project=f1optimizer \
+  --format="value(config.dagGcsPrefix)"
+# Returns something like: gs://us-central1-f1-composer-XXXXX-bucket/dags
+
+# 2. Upload the DAG
+gsutil cp Data-Pipeline/dags/f1_pipeline.py \
+  gs://[composer-bucket]/dags/
+
+# 3. Set environment variables in Composer
+gcloud composer environments update f1-composer-env \
+  --location=us-central1 --project=f1optimizer \
+  --update-env-variables=\
+GCS_RAW=gs://f1optimizer-data-lake/raw,\
+GCS_PROCESSED=gs://f1optimizer-data-lake/processed,\
+DATA_BUCKET=f1optimizer-data-lake,\
+MODELS_BUCKET=f1optimizer-models
+
+# 4. Trigger via CLI
+gcloud composer environments run f1-composer-env \
+  --location=us-central1 --project=f1optimizer \
+  dags trigger -- f1_data_pipeline
 ```
 
 The DAG (`Data-Pipeline/dags/f1_pipeline.py`) runs weekly and includes:

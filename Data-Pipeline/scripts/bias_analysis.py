@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +42,10 @@ _SCRIPT_DIR = Path(__file__).parent
 _REPO_ROOT = _SCRIPT_DIR.parents[1]
 _LOGS_DIR = _SCRIPT_DIR.parent / "logs"
 _LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Local fallback: Data-Pipeline/data/ when USE_LOCAL_DATA=true
+_USE_LOCAL = os.getenv("USE_LOCAL_DATA", "false").lower() == "true"
+_LOCAL_DATA_DIR = _SCRIPT_DIR.parent / "data"
 
 # ---------------------------------------------------------------------------
 # Classification lookups
@@ -282,7 +287,12 @@ def slice_by_weather(df: pd.DataFrame, lap_time_col: Optional[str]) -> List[Slic
 def run_bias_analysis(data_dir: Optional[str] = None) -> int:
     """Run bias analysis on processed Parquet data. Returns exit code."""
     if data_dir is None:
-        data_path = _REPO_ROOT / "data" / "processed"
+        if _USE_LOCAL:
+            data_path = _LOCAL_DATA_DIR
+            data_path.mkdir(parents=True, exist_ok=True)
+            logger.info("USE_LOCAL_DATA=true — reading from %s", data_path)
+        else:
+            data_path = _REPO_ROOT / "data" / "processed"
     else:
         data_path = Path(data_dir)
 

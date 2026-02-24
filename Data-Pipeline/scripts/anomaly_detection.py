@@ -46,6 +46,10 @@ _REPO_ROOT = _SCRIPT_DIR.parents[1]
 _LOGS_DIR = _SCRIPT_DIR.parent / "logs"
 _LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Local fallback: Data-Pipeline/data/ when USE_LOCAL_DATA=true
+_USE_LOCAL = os.getenv("USE_LOCAL_DATA", "false").lower() == "true"
+_LOCAL_DATA_DIR = _SCRIPT_DIR.parent / "data"
+
 VALID_COMPOUNDS = {"SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"}
 LAP_TIME_Z_THRESHOLD = 3.0
 PIT_STOP_MIN_S = 1.5
@@ -264,7 +268,12 @@ def _send_slack_alert(message: str, webhook_url: str) -> None:
 def run_anomaly_detection(data_dir: Optional[str] = None) -> int:
     """Run all anomaly checks. Returns exit code."""
     if data_dir is None:
-        data_path = _REPO_ROOT / "data" / "processed"
+        if _USE_LOCAL:
+            data_path = _LOCAL_DATA_DIR
+            data_path.mkdir(parents=True, exist_ok=True)
+            logger.info("USE_LOCAL_DATA=true — reading from %s", data_path)
+        else:
+            data_path = _REPO_ROOT / "data" / "processed"
     else:
         data_path = Path(data_dir)
 
