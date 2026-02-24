@@ -1,26 +1,49 @@
 # Team Documentation
 
-This directory contains **internal team documentation** for the F1 Strategy Optimizer project.
-These files are meant for developers working on the project and are **not part of the course submission**.
+Internal developer documentation for the F1 Strategy Optimizer project.
+These files are for contributors — not part of the course submission.
 
 ## Contents
 
 | File | Purpose |
 |---|---|
-| `ML_HANDOFF.md` | High-level ML handoff — GCP setup, training pipeline, model status |
-| `ml_module_handoff.md` | Detailed ML module handoff — all Vertex AI components, infra, commands |
-| `DEV_SETUP.md` | Developer onboarding guide — environment setup, authentication, common tasks |
-| `SETUP.md` | Quick setup reference for new contributors |
-| `session_summary.md` | Session-by-session progress log (gitignored — local only) |
+| [`DEV_SETUP.md`](./DEV_SETUP.md) | Developer onboarding — GCP auth, GCS access, Vertex AI, env vars |
+| [`ml_module_handoff.md`](./ml_module_handoff.md) | Full ML module handoff — Vertex AI components, training infra, commands |
+| [`SETUP.md`](./SETUP.md) | Quick setup reference for new contributors |
 
 ## For the Course Submission
 
-The grader-facing submission is in [`Data-Pipeline/`](../Data-Pipeline/).
-Start there for pipeline setup, DVC reproducibility, and Airflow DAG documentation.
+The graded submission lives in [`Data-Pipeline/`](../Data-Pipeline/).
+Start there for:
+- Airflow DAG (`Data-Pipeline/dags/f1_pipeline.py`)
+- DVC pipeline (`dvc.yaml`, `.dvc/config`)
+- Validation, anomaly detection, bias analysis scripts
+- Local and GCP run instructions
+- Cloud Composer and GCE VM deployment
 
-## What Is NOT Here
+## GCP Infrastructure Overview
 
-- Architecture decisions → [`docs/architecture.md`](../docs/architecture.md)
-- Model details → [`docs/models.md`](../docs/models.md)
+All infrastructure is Terraform-managed in `infra/terraform/`:
+
+| Resource | File | Description |
+|---|---|---|
+| GCS buckets, Cloud Run, Pub/Sub | `main.tf` | Core infra |
+| Vertex AI IAM + pipeline runs | `vertex_ml.tf` | ML training infra |
+| GCE VM for Airflow | `airflow_vm.tf` | `f1-airflow-vm`, e2-standard-2, COS |
+
+## Docker Images
+
+| Image | Dockerfile | Registry |
+|---|---|---|
+| `api:latest` | `docker/Dockerfile.api` | Artifact Registry |
+| `ml:latest` | `docker/Dockerfile.ml` | Artifact Registry |
+| `airflow:latest` | `docker/Dockerfile.airflow` | Artifact Registry |
+| `mock-dataflow` | `docker/Dockerfile.mock-dataflow` | Local only |
+
+## Cross-References
+
+- Architecture → [`docs/architecture.md`](../docs/architecture.md)
+- ML models → [`docs/models.md`](../docs/models.md)
 - Bias analysis → [`docs/bias.md`](../docs/bias.md)
-- Pipeline submission → [`Data-Pipeline/README.md`](../Data-Pipeline/README.md)
+- Monitoring → [`monitoring/README.md`](../monitoring/README.md)
+- Data pipeline → [`Data-Pipeline/README.md`](../Data-Pipeline/README.md)
