@@ -101,8 +101,8 @@ pip install dvc apache-airflow pandas pyarrow numpy tenacity
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/bkiritom8/F1-Strategy-Optimizer.git
-cd F1-Strategy-Optimizer
+git clone https://github.com/bkiritom8/test.git
+cd test
 
 # 2. Install dependencies
 pip install -r requirements-f1.txt

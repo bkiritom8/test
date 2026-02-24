@@ -12,7 +12,7 @@ of F1 data (1950–2026). Target: <500ms P99 latency.
 - **Training**: Vertex AI Custom Jobs + KFP Pipeline (5-step DAG)
 - **Serving**: FastAPI on Cloud Run (<500ms P99)
 - **Orchestration**: Airflow DAG on GCE VM (`f1-airflow-vm`, e2-standard-2)
-- **CI/CD**: Cloud Build on `main` branch — builds `api:latest`, `ml:latest`, `airflow:latest`
+- **CI/CD**: Cloud Build on `pipeline` branch — builds `api:latest`, `ml:latest`, `airflow:latest`
 
 ## Quick Start
 
@@ -98,7 +98,7 @@ team-docs/             Internal team docs (DEV_SETUP, handoffs)
 | `airflow:latest` | Artifact Registry | GCE VM + local docker-compose |
 | `mock-dataflow` | Local only | Local Dataflow simulation (dev only) |
 
-Cloud Build builds and pushes `api`, `ml`, and `airflow` on every push to `main`.
+Cloud Build builds and pushes `api`, `ml`, and `airflow` on every push to `pipeline`.
 
 ## Local Development
 
@@ -213,6 +213,6 @@ Course submission pipeline is in [`Data-Pipeline/`](./Data-Pipeline/).
 ---
 
 **Status**: Production-ready — GCE Airflow VM, 3 Docker images, full data pipeline
-**Last Updated**: 2026-02-23
+**Last Updated**: 2026-02-24
 **Repo**: [`bkiritom8/test`](https://github.com/bkiritom8/test)
-**Branch**: `main` (stable + CI/CD) | `ml-dev` (ML development)
+**Branch**: `main` (stable) | `pipeline` (CI/CD) | `ml-dev` (ML development)
