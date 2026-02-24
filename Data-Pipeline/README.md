@@ -390,8 +390,18 @@ python -c "import tensorflow_data_validation as tfdv; \
 ## Running Tests
 
 ```bash
-# All Data-Pipeline tests
+# Run all pipeline tests
 pytest Data-Pipeline/tests/ -v
+
+# Run specific test modules
+pytest Data-Pipeline/tests/test_anomaly_detection.py -v
+pytest Data-Pipeline/tests/test_bias_analysis.py -v
+pytest Data-Pipeline/tests/test_fastf1_ingestion.py -v
+pytest Data-Pipeline/tests/test_validator.py -v
+pytest Data-Pipeline/tests/test_generate_gantt.py -v
+pytest Data-Pipeline/tests/test_ingestion.py -v
+pytest Data-Pipeline/tests/test_csv_to_parquet.py -v
+pytest Data-Pipeline/tests/test_preprocessing.py -v
 
 # With coverage
 pytest Data-Pipeline/tests/ -v --cov=Data-Pipeline/scripts --cov=src/ingestion --cov-report=term-missing
@@ -400,7 +410,7 @@ pytest Data-Pipeline/tests/ -v --cov=Data-Pipeline/scripts --cov=src/ingestion -
 pytest tests/ ml/tests/ Data-Pipeline/tests/ -v
 ```
 
-Expected output: all tests pass in < 5 seconds (all network calls are mocked).
+Expected output: all tests pass (all network calls are mocked).
 
 ---
 
