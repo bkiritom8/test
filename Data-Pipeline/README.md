@@ -307,9 +307,9 @@ All code in this repository passes the following checks with **0 errors**:
 ruff check src/ ml/ pipeline/ Data-Pipeline/ tests/
 # Expected: no output (0 errors)
 
-# Auto-formatting check
-black --check src/ ml/ pipeline/ Data-Pipeline/ tests/
-# Expected: All done! ✨ 🍰 ✨  0 files would be reformatted.
+# Auto-formatting check (ruff replaces black — no pathspec dependency conflict)
+ruff format --check src/ ml/ pipeline/ Data-Pipeline/ tests/
+# Expected: no output (0 files would be reformatted)
 
 # Type checking
 mypy src/ ml/ --ignore-missing-imports
