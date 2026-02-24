@@ -166,7 +166,64 @@ Key env vars (see `.env.example`):
 | `SLACK_WEBHOOK_URL` | _(empty)_ | Optional anomaly alerts |
 | `AIRFLOW__CORE__EXECUTOR` | `LocalExecutor` | Airflow executor |
 
-### Airflow (local)
+### Running Locally (Docker Compose)
+
+```bash
+# 1. Set up env
+cp .env.example .env          # edit as needed
+
+# 2. Start Airflow
+docker-compose -f docker-compose.f1.yml up airflow-webserver airflow-scheduler
+
+# Airflow UI → http://localhost:8080  (admin / admin)
+# Trigger the pipeline from the UI, or:
+docker-compose -f docker-compose.f1.yml exec airflow-scheduler \
+  airflow dags trigger f1_data_pipeline
+```
+
+### Accessing the Airflow UI
+
+| Mode | URL | Credentials |
+|---|---|---|
+| Local (Docker Compose) | http://localhost:8080 | admin / admin |
+| GCP VM | http://\<VM_IP\>:8080 | admin / admin |
+| Cloud Composer | GCP Console → Composer environments | GCP account |
+
+Get VM IP: `terraform -chdir=infra/terraform output -raw airflow_vm_ip`
+
+### Running on GCP (GCE VM)
+
+The VM is provisioned by Terraform (`infra/terraform/airflow_vm.tf`):
+
+```bash
+# 1. Apply Terraform (provisions GCE VM + firewall rule)
+terraform -chdir=infra/terraform apply -var-file=dev.tfvars
+
+# 2. Deploy DAGs to GCS (VM auto-syncs every 5 minutes)
+bash Data-Pipeline/scripts/deploy_dags.sh
+```
+
+### Deploying DAG Updates
+
+Any time you update `Data-Pipeline/dags/f1_pipeline.py`:
+
+```bash
+bash Data-Pipeline/scripts/deploy_dags.sh
+# The GCE VM syncs from GCS automatically within 5 minutes.
+```
+
+### Mock Dataflow (local dev only, not on GCP)
+
+Simulates the Dataflow REST API locally on port 8088:
+
+```bash
+docker-compose -f docker-compose.f1.yml up mock-dataflow
+# API docs → http://localhost:8088/docs
+```
+
+This container is **not** deployed to GCP or Artifact Registry.
+
+### Airflow (pip install, no Docker)
 
 ```bash
 # Initialize Airflow database

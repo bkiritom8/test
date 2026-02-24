@@ -136,7 +136,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [api, ml]
+        service: [api, ml, airflow]
+        # mock-dataflow is LOCAL DEVELOPMENT ONLY — excluded from CI
 
     steps:
       - name: Checkout code
