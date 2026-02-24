@@ -333,6 +333,60 @@ Wall-clock total: **47 min** (parallel ingest saves ~5 min vs sequential).
 
 ---
 
+## Schema and Statistics
+
+`Data-Pipeline/scripts/validate_data.py` generates data statistics equivalent
+to a Great Expectations profile or TFDV `StatisticsGen` output — no external
+dependency required.
+
+```bash
+# Generate data statistics and validate schema
+python Data-Pipeline/scripts/validate_data.py
+
+# Output files:
+# Data-Pipeline/logs/data_statistics.json  — full statistics per dataset
+# Data-Pipeline/scripts/expectations/      — validation suite results
+
+# Via DVC (tracks both output files)
+dvc repro generate_statistics
+```
+
+`data_statistics.json` contains per-dataset entries with:
+- Row count, column count, completeness %
+- Column dtypes (schema)
+- Null count and null % per column
+- Numeric columns: min, max, mean, std, median
+- Categorical columns: unique count + top-5 value frequencies
+
+Terminal output (example with real data):
+
+```
+Dataset                        Rows   Cols   Completeness
+------------------------------------------------------------------
+laps_all                     93,372     12          99.8%
+telemetry_all            30,477,110     15          97.2%
+race_results                  7,600      8          98.5%
+pit_stops                    11,077      6          99.1%
+------------------------------------------------------------------
+Full statistics → Data-Pipeline/logs/data_statistics.json
+```
+
+To upgrade to full Great Expectations or TFDV when needed:
+
+```bash
+# Great Expectations
+pip install great-expectations
+great_expectations init && great_expectations suite new
+
+# TFDV
+pip install tensorflow-data-validation
+python -c "import tensorflow_data_validation as tfdv; \
+  stats = tfdv.generate_statistics_from_dataframe(df); \
+  tfdv.visualize_statistics(stats)"
+```
+
+---
+
 ## Running Tests
 
 ```bash
