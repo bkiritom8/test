@@ -131,6 +131,11 @@ Managed by Terraform in `infra/terraform/`. Review plan before applying:
 terraform -chdir=infra/terraform plan -var-file=dev.tfvars
 ```
 
+## Team Documentation
+
+Internal team docs are in [`team-docs/`](./team-docs/).
+Pipeline submission is in [`Data-Pipeline/`](./Data-Pipeline/).
+
 ---
 
 **Status**: ML handoff complete — data uploaded to GCS, models ready for training
