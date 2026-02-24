@@ -1,7 +1,7 @@
 # F1 Strategy Optimizer — Developer Setup Guide
 
 **Project**: `f1optimizer` (GCP, `us-central1`)
-**Repo**: `bkiritom8/test` | Branch: `main`
+**Repo**: [`bkiritom8/F1-Strategy-Optimizer`](https://github.com/bkiritom8/F1-Strategy-Optimizer) | Branch: `pipeline`
 
 ---
 
@@ -32,7 +32,7 @@ Install the following before starting:
 ### Clone and install Python dependencies
 
 ```bash
-git clone https://github.com/bkiritom8/test.git
+git clone https://github.com/bkiritom8/F1-Strategy-Optimizer.git
 cd test
 
 # Install all ML + dev dependencies
@@ -289,7 +289,7 @@ df = pd.read_parquet("gs://f1optimizer-data-lake/processed/laps.parquet")
 
 ```python
 import subprocess
-subprocess.run(["git", "clone", "https://github.com/bkiritom8/test.git"], check=True)
+subprocess.run(["git", "clone", "https://github.com/bkiritom8/F1-Strategy-Optimizer.git"], check=True)
 import sys
 sys.path.insert(0, "/content/test")
 ```

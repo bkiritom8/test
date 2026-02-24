@@ -24,8 +24,8 @@ of F1 data (1950–2026). Target: <500ms P99 latency.
 ### Setup
 
 ```bash
-git clone https://github.com/bkiritom8/test.git
-cd test
+git clone https://github.com/bkiritom8/F1-Strategy-Optimizer.git
+cd F1-Strategy-Optimizer
 pip install -r requirements-f1.txt
 
 # Authenticate with GCP
@@ -140,4 +140,5 @@ Pipeline submission is in [`Data-Pipeline/`](./Data-Pipeline/).
 
 **Status**: ML handoff complete — data uploaded to GCS, models ready for training
 **Last Updated**: 2026-02-20
-**Branch**: `main` (stable) | `pipeline` (CI/CD trigger) | `ml-dev` (ML development)
+**Repo**: [`bkiritom8/F1-Strategy-Optimizer`](https://github.com/bkiritom8/F1-Strategy-Optimizer)
+**Branch**: `pipeline` (primary submission) | `main` (stable) | `ml-dev` (ML development)
