@@ -50,3 +50,10 @@ stages:
       - Data-Pipeline/scripts/bias_analysis.py
     outs:
       - Data-Pipeline/logs/bias_report.json
+
+  generate_gantt:
+    cmd: python Data-Pipeline/scripts/generate_gantt.py
+    deps:
+      - Data-Pipeline/scripts/generate_gantt.py
+    outs:
+      - Data-Pipeline/logs/gantt_chart.png

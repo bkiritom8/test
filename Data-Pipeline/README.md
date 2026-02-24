@@ -54,6 +54,7 @@ Data-Pipeline/
 │   ├── validate_data.py        Schema + data quality validation
 │   ├── anomaly_detection.py    Outlier and missing-value detection
 │   ├── bias_analysis.py        Representation bias via data slicing
+│   ├── generate_gantt.py       Gantt chart from task durations (PNG + ASCII)
 │   └── expectations/
 │       └── .gitkeep            GE-style JSON suites written here at runtime
 ├── tests/
@@ -62,7 +63,7 @@ Data-Pipeline/
 │   ├── test_csv_to_parquet.py  Unit tests for CSV conversion
 │   └── test_preprocessing.py  Unit tests for validation logic
 ├── logs/
-│   └── .gitkeep                anomaly_report.json, bias_report.json written here
+│   └── .gitkeep                anomaly_report.json, bias_report.json, gantt_chart.png written here
 ├── .env.example                Environment variable template (copy to .env)
 ├── dvc.yaml                    Pipeline stages for this directory
 └── README.md                   This file
@@ -281,6 +282,57 @@ The DAG (`Data-Pipeline/dags/f1_pipeline.py`) runs weekly and includes:
 
 ---
 
+## Pipeline Flow Optimization
+
+The DAG is optimised for wall-clock time by running the two ingest tasks in
+parallel (`fetch_jolpica_data` ∥ `fetch_fastf1_data`). The FastF1 download is
+the dominant bottleneck (~30 min for 3 seasons of 10Hz telemetry); all
+downstream tasks wait on it.
+
+```
+fetch_jolpica_data  ──┐
+                       ├──► validate_raw ──► preprocess ──► detect_anomalies ──► build_features ──► bias_analysis
+fetch_fastf1_data  ───┘ ← bottleneck
+```
+
+### Gantt Chart
+
+Visualise task durations without the Airflow UI:
+
+```bash
+# Generate Gantt chart (PNG + ASCII terminal output)
+python Data-Pipeline/scripts/generate_gantt.py
+# Output: Data-Pipeline/logs/gantt_chart.png
+
+# ASCII only (no matplotlib required)
+python Data-Pipeline/scripts/generate_gantt.py --ascii-only
+
+# Use real timings from a previous run
+python Data-Pipeline/scripts/generate_gantt.py \
+  --data-file Data-Pipeline/logs/pipeline_runs.json
+
+# Via DVC
+dvc repro generate_gantt
+```
+
+When `pipeline_runs.json` is absent the script uses hardcoded estimates:
+
+```
+Task                    | 0         10        20        30        40        50        60 min
+------------------------|----------------------------------------------------------------------
+fetch_jolpica_data      | [=====]
+fetch_fastf1_data       | [==============================] ← bottleneck
+validate_raw_data       |                               [==]
+preprocess_data         |                                 [=====]
+detect_anomalies        |                                      [=]
+build_features          |                                       [=======]
+bias_analysis           |                                               [==]
+```
+
+Wall-clock total: **47 min** (parallel ingest saves ~5 min vs sequential).
+
+---
+
 ## Running Tests
 
 ```bash
@@ -335,7 +387,7 @@ dvc pull
 ```
 
 The DVC pipeline is defined in `dvc.yaml` at the repo root.
-Stages: `ingest_jolpica → ingest_fastf1 → preprocess → validate → detect_anomalies → build_features → bias_analysis`
+Stages: `ingest_jolpica → ingest_fastf1 → preprocess → validate → detect_anomalies → build_features → bias_analysis → generate_gantt`
 
 ---
 
@@ -350,6 +402,7 @@ Stages: `ingest_jolpica → ingest_fastf1 → preprocess → validate → detect
 | `Data-Pipeline/scripts/expectations/validation_suite.json` | Validation results |
 | `Data-Pipeline/logs/anomaly_report.json` | Anomaly detection report |
 | `Data-Pipeline/logs/bias_report.json` | Bias analysis report |
+| `Data-Pipeline/logs/gantt_chart.png` | Pipeline Gantt chart (PNG) |
 
 ---
 
