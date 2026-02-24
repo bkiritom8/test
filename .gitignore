@@ -240,9 +240,14 @@ data/raw/fastf1_cache/
 .dvc/tmp/
 .dvc/cache/
 
-# Logs
+# Logs (generated at runtime)
 Data-Pipeline/logs/*.json
+Data-Pipeline/logs/*.png
 !Data-Pipeline/logs/.gitkeep
+
+# FastF1 binary cache files
+*.ff1pkl
+*.sqlite
 
 # Airflow
 airflow.db
